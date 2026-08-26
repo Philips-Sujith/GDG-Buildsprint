@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Grievance from './pages/Grievance';
 import BookSearch from './pages/BookSearch';
 import Contribution from './pages/Contribution';
+import Profile from './pages/Profile';
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -54,6 +55,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Grievance />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           }
         />

@@ -1,20 +1,19 @@
 import axios from 'axios';
 
-// Base API configuration (configurable via VITE_API_URL or defaults to backend /api)
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
+/**
+ * Single shared Axios instance for all teammates (Person 1, Person 2, Person 3)
+ */
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
 });
 
-// Request interceptor to attach shared Auth Token (JWT)
+// Attach JWT token automatically to every outgoing request if available
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token') || localStorage.getItem('authToken');
+    const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -23,48 +22,53 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor for consistent error handling
+// Response interceptor for graceful error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('API Call Error:', error?.response?.data || error.message);
+    if (error.response && error.response.status === 401) {
+      // Don't auto-redirect on public search pages
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/register' && path !== '/books' && path !== '/contributions') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
     return Promise.reject(error);
   }
 );
 
-// Alias for backwards compatibility with Person 1 components
-export const API = api;
-
 /* =========================================================================
-   ======================= PERSON 1: AUTH & DASHBOARD ======================
+   =================== PERSON 1: AUTH & CORE SERVICES ======================
    ========================================================================= */
 
 /**
  * Register a new student account
- * @param {Object} data - { name, regNo, year, department, email, password }
+ * @param {Object} userData - { name, regNo, year, department, email, password }
  */
-export const registerUser = (data) => api.post('/auth/register', data);
+export const registerUser = (userData) => api.post('/auth/register', userData);
 
 /**
  * Login existing student
- * @param {Object} data - { regNo, password }
+ * @param {Object} credentials - { regNo, password }
  */
-export const loginUser = (data) => api.post('/auth/login', data);
+export const loginUser = (credentials) => api.post('/auth/login', credentials);
 
 /**
- * Get current real-time library crowd count and floor breakdown
+ * Fetch live library crowd count
  */
 export const getLibraryCount = () => api.get('/library/count');
 
 /**
- * Submit a book condition/damage grievance
- * @param {Object} data - { bookName, coverPhotoUrl, reasonPhotoUrl, reasonText, shelfCode }
+ * Submit book grievance with damage details
+ * @param {Object} grievanceData - { bookName, coverPhotoUrl, reasonPhotoUrl, reasonText, shelfCode }
  */
-export const submitGrievance = (data) => api.post('/grievance', data);
+export const submitGrievance = (grievanceData) => api.post('/grievance', grievanceData);
 
 /**
- * Shared File Upload (Cloudinary / Multer)
- * Supports both { data } deconstruction and direct .url/.fileUrl access
+ * Upload single file (book cover, damage photo, study note) to backend
+ * Handles both JSON responses and FormData payloads
  * @param {File} file - Browser File object
  */
 export const uploadFile = async (file) => {
@@ -135,10 +139,122 @@ export const uploadMaterial = async (materialData) => {
 
 /**
  * Search study materials by query and optional year filter
- * @param {Object} params - { q, year, limit }
+ * @param {Object} params - { q, year }
  */
 export const searchMaterials = async (params = {}) => {
   const response = await api.get('/materials/search', { params });
+  return response.data;
+};
+
+/* =========================================================================
+   =================== PERSON 3: PROFILE, PAYMENTS, GROUPS & PRESENCE ======
+   ========================================================================= */
+
+/**
+ * Fetch Student Profile details (borrowed books, dues, fine totals)
+ * GET /api/profile/:regNo
+ */
+export const getProfile = async (regNo) => {
+  const response = await api.get(`/profile/${regNo}`);
+  return response.data;
+};
+
+/**
+ * Create a Demo Payment Order for fine dues
+ * POST /api/payment/create-order
+ */
+export const createPaymentOrder = async (regNo, amount) => {
+  const response = await api.post('/payment/create-order', { regNo, amount });
+  return response.data;
+};
+
+/**
+ * Process / Verify Demo Payment Order
+ * POST /api/payment/verify
+ */
+export const verifyPayment = async (orderId, regNo, paymentMethod = 'UPI', transactionId = null, amount = 0) => {
+  const response = await api.post('/payment/verify', { orderId, regNo, paymentMethod, transactionId, amount });
+  return response.data;
+};
+
+/**
+ * Create a new Study/Material Sharing Group
+ * POST /api/groups
+ */
+export const createGroup = async (ownerRegNo, memberRegNos) => {
+  const response = await api.post('/groups', { ownerRegNo, memberRegNos });
+  return response.data;
+};
+
+/**
+ * Fetch Study Groups accessible to Student
+ * GET /api/groups/:regNo
+ */
+export const getGroups = async (regNo) => {
+  const response = await api.get(`/groups/${regNo}`);
+  return response.data;
+};
+
+/**
+ * Share a Material to a Group
+ * POST /api/groups/:id/share
+ */
+export const shareToGroup = async (groupId, materialId, regNo) => {
+  const response = await api.post(`/groups/${groupId}/share`, { materialId, regNo });
+  return response.data;
+};
+
+/**
+ * Check-in to Library Presence
+ * POST /api/presence/checkin
+ */
+export const checkIn = async (regNo, floor) => {
+  const response = await api.post('/presence/checkin', { regNo, floor });
+  return response.data;
+};
+
+/**
+ * Respond to Library Presence Ping Alert ("Are you still in library?")
+ * POST /api/presence/ping-response
+ */
+export const respondToPing = async (regNo, stillHere) => {
+  const response = await api.post('/presence/ping-response', { regNo, stillHere });
+  return response.data;
+};
+
+/**
+ * Get Presence Status for Student
+ * GET /api/presence/:regNo
+ */
+export const getPresence = async (regNo) => {
+  const response = await api.get(`/presence/${regNo}`);
+  return response.data;
+};
+
+/**
+ * Fetch Unread Notifications for Student
+ * GET /api/notifications/:regNo
+ */
+export const getNotifications = async (regNo) => {
+  const response = await api.get(`/notifications/${regNo}`);
+  return response.data;
+};
+
+/**
+ * Dismiss a specific notification by ID
+ * POST /api/notifications/:id/read
+ */
+export const dismissNotification = async (id) => {
+  const response = await api.post(`/notifications/${id}/read`);
+  return response.data;
+};
+
+/**
+ * Dismiss unread notifications by message pattern
+ * POST /api/notifications/dismiss
+ */
+export const dismissNotificationsByPattern = async (regNo, message) => {
+  const response = await api.post('/notifications/dismiss', { regNo, message });
   return response.data;
 };
 

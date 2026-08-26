@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Library, Lock, User, Mail, GraduationCap, AlertCircle, ArrowRight } from 'lucide-react';
 import { registerUser } from '../api/api';
 
 const departments = ['CSE', 'ECE', 'IT', 'EEE', 'MECH', 'CIVIL', 'AIDS', 'AIML'];
 
 export default function Register() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', regNo: '', year: '1', department: 'CSE', email: '', password: '' });
+  const [form, setForm] = useState({
+    name: '',
+    regNo: '',
+    year: '1',
+    department: 'CSE',
+    email: '',
+    password: '',
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -22,67 +30,198 @@ export default function Register() {
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'Registration failed. Please try again.');
+      setError(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          err.message ||
+          'Registration failed. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <span className="text-5xl">📚</span>
-          <h1 className="mt-4 text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Smart Library</h1>
-          <p className="mt-2 text-slate-400">Create your account</p>
+    <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4 font-sans relative overflow-hidden">
+      {/* Background glowing orb */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="w-full max-w-lg relative z-10 space-y-6 my-8">
+        
+        {/* Brand Header */}
+        <div className="text-center space-y-3">
+          <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-xl shadow-indigo-500/20">
+            <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+              <Library className="w-7 h-7 text-indigo-400" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">
+            Create Student <span className="heading-gradient">Account</span>
+          </h1>
+          <p className="text-sm text-slate-400">Join the Smart Library platform today</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-8 shadow-2xl space-y-4">
-          {error && <div className="bg-red-500/20 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">{error}</div>}
+        {/* Register Form */}
+        <form onSubmit={handleSubmit} className="app-card-container p-6 sm:p-8 space-y-4 shadow-2xl">
+          
+          {error && (
+            <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/60 text-red-200 text-xs flex items-center gap-2.5">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Full Name</label>
-            <input name="name" value={form.name} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="John Doe" />
+          {/* Full Name */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Full Name <span className="text-indigo-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <User className="w-4 h-4" />
+              </div>
+              <input
+                name="name"
+                value={form.name}
+                onChange={handleChange}
+                required
+                className="app-input pl-10"
+                placeholder="e.g. Sujith Kumar"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Registration No</label>
-            <input name="regNo" value={form.regNo} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="2023503518" />
+          {/* Registration Number */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Registration Number <span className="text-indigo-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <GraduationCap className="w-4 h-4" />
+              </div>
+              <input
+                name="regNo"
+                value={form.regNo}
+                onChange={handleChange}
+                required
+                className="app-input pl-10 font-mono"
+                placeholder="e.g. 2023503518"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Year</label>
-              <select name="year" value={form.year} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition">
-                {[1, 2, 3, 4].map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
+          {/* Academic Year & Department */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Academic Year <span className="text-indigo-400">*</span>
+              </label>
+              <select
+                name="year"
+                value={form.year}
+                onChange={handleChange}
+                className="app-select w-full"
+              >
+                {[1, 2, 3, 4].map((y) => (
+                  <option key={y} value={y} className="bg-slate-900">
+                    Year {y}
+                  </option>
+                ))}
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
-              <select name="department" value={form.department} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition">
-                {departments.map((d) => <option key={d} value={d} className="bg-slate-800">{d}</option>)}
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Department <span className="text-indigo-400">*</span>
+              </label>
+              <select
+                name="department"
+                value={form.department}
+                onChange={handleChange}
+                className="app-select w-full"
+              >
+                {departments.map((d) => (
+                  <option key={d} value={d} className="bg-slate-900">
+                    {d}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
-            <input name="email" type="email" value={form.email} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="you@example.com" />
+          {/* Email */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Email Address
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <Mail className="w-4 h-4" />
+              </div>
+              <input
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                className="app-input pl-10"
+                placeholder="you@student.edu"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
-            <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={6} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="••••••••" />
+          {/* Password */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              Password (min 6 characters) <span className="text-indigo-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <Lock className="w-4 h-4" />
+              </div>
+              <input
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+                required
+                minLength={6}
+                className="app-input pl-10"
+                placeholder="••••••••"
+              />
+            </div>
           </div>
 
-          <button type="submit" disabled={loading} className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold hover:from-blue-500 hover:to-cyan-500 transition-all duration-200 shadow-lg shadow-blue-500/25 disabled:opacity-50 cursor-pointer">
-            {loading ? 'Creating account...' : 'Register'}
-          </button>
+          {/* Submit Button */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary w-full py-3"
+            >
+              {loading ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                <>
+                  <span>Create Account</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
 
-          <p className="text-center text-sm text-slate-400">
-            Already have an account? <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium">Login</Link>
+          {/* Switch to Login */}
+          <p className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
+            Already have an account?{' '}
+            <Link to="/login" className="text-indigo-400 hover:text-indigo-300 font-semibold">
+              Sign In
+            </Link>
           </p>
         </form>
+
       </div>
     </div>
   );
