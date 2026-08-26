@@ -22,6 +22,17 @@ app.get("/", (req, res) => {
   });
 });
 
+// Routes
+app.use("/api/profile", require("./routes/profile"));
+app.use("/api/payment", require("./routes/payment"));
+app.use("/api/presence", require("./routes/presence"));
+app.use("/api/groups", require("./routes/groups"));
+app.use("/api/notifications", require("./routes/notifications"));
+
+// Initialize background jobs
+require("./jobs/dueDateChecker");
+require("./jobs/presencePing");
+
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGO_URI)
@@ -35,4 +46,4 @@ mongoose
   .catch((error) => {
     console.error("MongoDB connection failed:");
     console.error(error.message);
-  });
+  });
