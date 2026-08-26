@@ -14,6 +14,17 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Routes
+const authRoutes = require('./routes/auth');
+const libraryRoutes = require('./routes/library');
+const grievanceRoutes = require('./routes/grievance');
+const uploadRoutes = require('./routes/upload');
+
+app.use('/api/auth', authRoutes);
+app.use('/api/library', libraryRoutes);
+app.use('/api/grievance', grievanceRoutes);
+app.use('/api/upload', uploadRoutes);
+
 // Test route
 app.get("/", (req, res) => {
   res.json({

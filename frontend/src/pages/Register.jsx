@@ -1,0 +1,89 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { registerUser } from '../api/api';
+
+const departments = ['CSE', 'ECE', 'IT', 'EEE', 'MECH', 'CIVIL', 'AIDS', 'AIML'];
+
+export default function Register() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState({ name: '', regNo: '', year: '1', department: 'CSE', email: '', password: '' });
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const { data } = await registerUser({ ...form, year: Number(form.year) });
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      navigate('/');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-4" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <span className="text-5xl">📚</span>
+          <h1 className="mt-4 text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">Smart Library</h1>
+          <p className="mt-2 text-slate-400">Create your account</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-8 shadow-2xl space-y-4">
+          {error && <div className="bg-red-500/20 border border-red-500/30 text-red-300 text-sm px-4 py-3 rounded-lg">{error}</div>}
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Full Name</label>
+            <input name="name" value={form.name} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="John Doe" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Registration No</label>
+            <input name="regNo" value={form.regNo} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="2023503518" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Year</label>
+              <select name="year" value={form.year} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition">
+                {[1, 2, 3, 4].map((y) => <option key={y} value={y} className="bg-slate-800">{y}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Department</label>
+              <select name="department" value={form.department} onChange={handleChange} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition">
+                {departments.map((d) => <option key={d} value={d} className="bg-slate-800">{d}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+            <input name="email" type="email" value={form.email} onChange={handleChange} required className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="you@example.com" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Password</label>
+            <input name="password" type="password" value={form.password} onChange={handleChange} required minLength={6} className="w-full px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition" placeholder="••••••••" />
+          </div>
+
+          <button type="submit" disabled={loading} className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold hover:from-blue-500 hover:to-cyan-500 transition-all duration-200 shadow-lg shadow-blue-500/25 disabled:opacity-50 cursor-pointer">
+            {loading ? 'Creating account...' : 'Register'}
+          </button>
+
+          <p className="text-center text-sm text-slate-400">
+            Already have an account? <Link to="/login" className="text-blue-400 hover:text-blue-300 font-medium">Login</Link>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
