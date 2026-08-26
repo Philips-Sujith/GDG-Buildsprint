@@ -22,7 +22,7 @@ export default function Register() {
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

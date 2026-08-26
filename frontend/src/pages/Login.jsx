@@ -20,7 +20,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(data.user));
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

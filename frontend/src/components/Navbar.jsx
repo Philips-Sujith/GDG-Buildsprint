@@ -4,8 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 const navLinks = [
   { to: '/', label: 'Home' },
   { to: '/books', label: 'Book Search' },
-  { to: '/materials', label: 'Contribution' },
-  { to: '/profile', label: 'Profile' },
+  { to: '/contributions', label: 'Contributions' },
   { to: '/grievance', label: 'Grievance' },
 ];
 
@@ -19,6 +18,13 @@ export default function Navbar() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/login');
+  };
+
+  const isLinkActive = (to) => {
+    if (to === '/' && location.pathname === '/') return true;
+    if (to !== '/' && location.pathname.startsWith(to)) return true;
+    if (to === '/contributions' && location.pathname === '/materials') return true;
+    return false;
   };
 
   return (
@@ -40,8 +46,8 @@ export default function Navbar() {
                 key={link.to}
                 to={link.to}
                 className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  location.pathname === link.to
-                    ? 'bg-white/15 text-white'
+                  isLinkActive(link.to)
+                    ? 'bg-white/15 text-white shadow-sm'
                     : 'text-slate-300 hover:bg-white/10 hover:text-white'
                 }`}
               >
@@ -89,7 +95,7 @@ export default function Navbar() {
                 to={link.to}
                 onClick={() => setMenuOpen(false)}
                 className={`block px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                  location.pathname === link.to
+                  isLinkActive(link.to)
                     ? 'bg-white/15 text-white'
                     : 'text-slate-300 hover:bg-white/10 hover:text-white'
                 }`}
