@@ -160,20 +160,31 @@ export const getProfile = async (regNo) => {
 };
 
 /**
- * Create a Demo Payment Order for fine dues
+ * Create a Cashfree Sandbox Payment Order for fine dues
  * POST /api/payment/create-order
+ * @param {string} regNo
+ * @param {number} amount
+ * @param {Object} customerDetails
  */
-export const createPaymentOrder = async (regNo, amount) => {
-  const response = await api.post('/payment/create-order', { regNo, amount });
+export const createPaymentOrder = async (regNo, amount, customerDetails = {}) => {
+  const response = await api.post('/payment/create-order', {
+    regNo,
+    amount,
+    customerName: customerDetails.name,
+    customerEmail: customerDetails.email,
+    customerPhone: customerDetails.phone,
+  });
   return response.data;
 };
 
 /**
- * Process / Verify Demo Payment Order
+ * Verify Cashfree Sandbox Payment Order with backend
  * POST /api/payment/verify
+ * @param {string} orderId
+ * @param {string} regNo
  */
-export const verifyPayment = async (orderId, regNo, paymentMethod = 'UPI', transactionId = null, amount = 0) => {
-  const response = await api.post('/payment/verify', { orderId, regNo, paymentMethod, transactionId, amount });
+export const verifyPayment = async (orderId, regNo) => {
+  const response = await api.post('/payment/verify', { orderId, regNo });
   return response.data;
 };
 
