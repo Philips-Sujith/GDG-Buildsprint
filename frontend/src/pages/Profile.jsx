@@ -46,16 +46,8 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Demo Payment Gateway State
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
-  const [paymentStep, setPaymentStep] = useState("SELECT_METHOD"); // "SELECT_METHOD" | "PROCESSING" | "SUCCESS"
-  const [paymentMethod, setPaymentMethod] = useState("UPI"); // "UPI" | "CARD" | "NETBANKING"
-  const [upiId, setUpiId] = useState("student@upi");
-  const [cardNumber, setCardNumber] = useState("4532 8920 1142 8821");
-  const [cardExpiry, setCardExpiry] = useState("12/28");
-  const [cardCvv, setCardCvv] = useState("842");
-  const [cardHolder, setCardHolder] = useState("");
-  const [selectedBank, setSelectedBank] = useState("State Bank of India (SBI)");
+  // Razorpay Payment Gateway State
+  const [paymentLoading, setPaymentLoading] = useState(false);
   const [paymentReceipt, setPaymentReceipt] = useState(null);
   const [paymentMsg, setPaymentMsg] = useState("");
   const [paymentStatusType, setPaymentStatusType] = useState("info"); // "success" | "error" | "info"
@@ -88,8 +80,6 @@ export default function Profile() {
 
       if (profileData.status === "fulfilled") {
         setProfile(profileData.value);
-        setCardHolder(profileData.value.name || "Student Name");
-        setUpiId(`${studentRegNo.toLowerCase()}@upi`);
       } else {
         setError("Failed to load profile data.");
       }
@@ -123,74 +113,139 @@ export default function Profile() {
     loadData(regNo);
   }, [regNo]);
 
-  // Open Demo Payment Modal
-  const handleOpenPaymentModal = () => {
-    if (!profile || profile.totalDue <= 0) return;
-    setPaymentStep("SELECT_METHOD");
+  // Handle Razorpay Fine Payment
+  const handlePayFine = async () => {
+    if (!profile || profile.totalDue <= 0 || paymentLoading) return;
+
     setPaymentMsg("");
-    setPaymentModalOpen(true);
-  };
+    setPaymentStatusType("info");
 
-  // Close Payment Modal & Refresh
-  const handleClosePaymentModal = () => {
-    setPaymentModalOpen(false);
-    setPaymentStep("SELECT_METHOD");
-    setPaymentReceipt(null);
-    loadData(regNo);
-  };
+    // 1. Verify Razorpay script is loaded
+    if (typeof window.Razorpay === "undefined") {
+      setPaymentStatusType("error");
+      setPaymentMsg(
+        "Razorpay payment gateway SDK failed to load. Please check your internet connection or reload the page."
+      );
+      return;
+    }
 
-  // Process Demo Payment
-  const handleProcessPayment = async () => {
-    if (!profile || profile.totalDue <= 0) return;
-    setPaymentStep("PROCESSING");
-
-    const amountToPay = profile.totalDue;
-    const cleanRegNo = regNo.replace(/[^a-zA-Z0-9]/g, "");
-    const orderId = `DEMO_ORDER_${cleanRegNo}_${Date.now()}`;
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const randomSuffix = Math.floor(10000 + Math.random() * 90000);
-    const txnId = `DEMO-TXN-${dateStr}-${randomSuffix}`;
+    setPaymentLoading(true);
 
     try {
-      // Short realistic delay (1.2s) for smooth processing animation
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      // 2. Call backend to create Razorpay Test Mode Order (authoritative fine calculated from MongoDB)
+      const orderRes = await createPaymentOrder(regNo);
 
-      // Call backend API to record payment and clear fine in MongoDB
-      const res = await verifyPayment(orderId, regNo, paymentMethod, txnId, amountToPay);
-
-      if (res.success && res.isPaid) {
-        const receiptData = {
-          studentName: profile.name,
-          regNo: regNo,
-          amountPaid: amountToPay,
-          transactionId: res.transactionId || txnId,
-          paymentMethod:
-            paymentMethod === "UPI"
-              ? `UPI (${upiId || "student@upi"})`
-              : paymentMethod === "CARD"
-              ? `Card (•••• ${cardNumber.slice(-4)})`
-              : `Net Banking (${selectedBank})`,
-          timestamp: new Date().toLocaleString("en-US", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          }),
-        };
-
-        setPaymentReceipt(receiptData);
-        setPaymentStep("SUCCESS");
-        setPaymentStatusType("success");
-        setPaymentMsg("Payment successful. Your outstanding fine has been cleared.");
-      } else {
-        setPaymentStep("SELECT_METHOD");
-        setPaymentStatusType("error");
-        setPaymentMsg("Payment processing failed. Please try again.");
+      if (!orderRes.success || !orderRes.data) {
+        throw new Error(orderRes.message || "Failed to initiate payment order with server.");
       }
+
+      const { orderId, amount, currency, keyId } = orderRes.data;
+
+      // 3. Configure Razorpay Checkout options
+      const options = {
+        key: keyId,
+        amount: amount,
+        currency: currency || "INR",
+        name: "Smart Library Management System",
+        description: "Library Fine Payment",
+        order_id: orderId,
+        prefill: {
+          name: profile.name || authUser.name || "",
+          email: profile.email || authUser.email || "",
+          contact: profile.phone || authUser.phone || "",
+        },
+        theme: {
+          color: "#4f46e5",
+        },
+        handler: async function (response) {
+          try {
+            setPaymentMsg("Verifying payment with library server...");
+            setPaymentStatusType("info");
+
+            // 4. Verify payment cryptographically with backend
+            const verifyRes = await verifyPayment({
+              regNo,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            if (verifyRes.success && verifyRes.data?.status === "Paid") {
+              const receiptData = {
+                studentName: profile.name,
+                regNo: regNo,
+                amountPaid: verifyRes.data.amount || profile.totalDue,
+                transactionId: response.razorpay_payment_id,
+                orderId: response.razorpay_order_id,
+                paymentMethod: verifyRes.data.paymentMethod || "Razorpay Online",
+                timestamp: new Date().toLocaleString("en-US", {
+                  dateStyle: "medium",
+                  timeStyle: "short",
+                }),
+              };
+
+              setPaymentReceipt(receiptData);
+              setPaymentStatusType("success");
+              setPaymentMsg(
+                `Payment of ₹${receiptData.amountPaid} verified successfully! Outstanding fine has been cleared.`
+              );
+
+              // Refresh profile data and notifications
+              await loadData(regNo);
+            } else {
+              setPaymentStatusType("error");
+              setPaymentMsg(
+                verifyRes.message || "Payment verification failed on server. Your fine has not been cleared."
+              );
+            }
+          } catch (verifyErr) {
+            console.error("Payment verification error:", verifyErr);
+            setPaymentStatusType("error");
+            setPaymentMsg(
+              verifyErr.response?.data?.message ||
+                verifyErr.message ||
+                "Error verifying payment with server. Your fine has not been changed."
+            );
+          } finally {
+            setPaymentLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            setPaymentLoading(false);
+            setPaymentStatusType("info");
+            setPaymentMsg("Payment checkout was cancelled. No charges were made.");
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+
+      rzp.on("payment.failed", function (response) {
+        setPaymentLoading(false);
+        setPaymentStatusType("error");
+        setPaymentMsg(
+          response.error?.description || "Payment failed at gateway. Your fine remains unchanged."
+        );
+      });
+
+      rzp.open();
     } catch (err) {
-      console.error("Demo Payment Error:", err);
-      setPaymentStep("SELECT_METHOD");
+      console.error("Payment initiation error:", err);
+      setPaymentLoading(false);
       setPaymentStatusType("error");
-      setPaymentMsg("Payment failed. Your fine has not been changed.");
+      setPaymentMsg(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to initiate payment. Please try again."
+      );
     }
+  };
+
+  // Close Payment Receipt Modal & Refresh Data
+  const handleCloseReceiptModal = () => {
+    setPaymentReceipt(null);
+    loadData(regNo);
   };
 
   // Create Group Handler
@@ -544,16 +599,25 @@ export default function Profile() {
 
                       <button
                         type="button"
-                        onClick={handleOpenPaymentModal}
-                        disabled={!profile.totalDue || profile.totalDue <= 0}
+                        onClick={handlePayFine}
+                        disabled={!profile.totalDue || profile.totalDue <= 0 || paymentLoading}
                         className={`text-xs py-2 px-4 font-semibold transition flex items-center gap-2 ${
                           profile.totalDue > 0
                             ? "btn-success cursor-pointer shadow-lg shadow-emerald-500/20"
                             : "bg-slate-800 text-slate-500 border border-slate-700/60 rounded-xl cursor-not-allowed opacity-60"
                         }`}
                       >
-                        <CreditCard className="w-4 h-4" />
-                        <span>{profile.totalDue > 0 ? "Pay Fine" : "Paid"}</span>
+                        {paymentLoading ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>Processing...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CreditCard className="w-4 h-4" />
+                            <span>{profile.totalDue > 0 ? "Pay Fine" : "Paid"}</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -713,293 +777,71 @@ export default function Profile() {
       </main>
 
       {/* =========================================================================
-         ============= PROFESSIONAL DEMO PAYMENT GATEWAY MODAL ===================
+         ============= RAZORPAY TEST MODE PAYMENT RECEIPT MODAL ===================
          ========================================================================= */}
-      {paymentModalOpen && (
+      {paymentReceipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
           {/* Backdrop Click */}
-          <div className="fixed inset-0" onClick={paymentStep !== "PROCESSING" ? handleClosePaymentModal : undefined}></div>
+          <div className="fixed inset-0" onClick={handleCloseReceiptModal}></div>
 
           <div className="relative z-10 w-full max-w-lg app-card-container p-6 sm:p-7 shadow-2xl border border-slate-700/80 space-y-6">
-
-            {/* Step 1: Select Payment Method & Enter Demo Details */}
-            {paymentStep === "SELECT_METHOD" && (
-              <>
-                {/* Modal Header */}
-                <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-extrabold shadow-lg shadow-emerald-500/20">
-                      ₹
-                    </div>
-                    <div>
-                      <h3 className="font-extrabold text-white text-lg leading-tight">Pay Library Fine</h3>
-                      <div className="inline-flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mt-0.5">
-                        <ShieldCheck className="w-3.5 h-3.5" />
-                        <span>Demo Payment Gateway</span>
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleClosePaymentModal}
-                    className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition cursor-pointer"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+            <div className="space-y-5 animate-fadeIn">
+              {/* Success Icon & Header */}
+              <div className="text-center space-y-2 pt-2">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/20">
+                  <Check className="w-8 h-8 stroke-[3]" />
                 </div>
-
-                {/* Student & Fine Details Card */}
-                <div className="bg-slate-950/90 p-4 rounded-xl border border-slate-800/90 space-y-2.5">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400">Student Name:</span>
-                    <span className="font-semibold text-white">{profile.name}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-slate-400">Register Number:</span>
-                    <span className="font-mono text-indigo-300 font-semibold">{profile.regNo}</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-2.5 border-t border-slate-800">
-                    <span className="text-sm font-bold text-slate-200">Outstanding Fine Amount:</span>
-                    <span className="text-2xl font-extrabold text-emerald-400 font-mono">₹{profile.totalDue}</span>
-                  </div>
-                </div>
-
-                {/* Payment Method Selector Tabs */}
-                <div className="space-y-3">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Choose Payment Method
-                  </span>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("UPI")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-semibold cursor-pointer ${
-                        paymentMethod === "UPI"
-                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10"
-                          : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
-                      }`}
-                    >
-                      <Smartphone className={`w-5 h-5 ${paymentMethod === "UPI" ? "text-indigo-400" : "text-slate-400"}`} />
-                      <span>UPI</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("CARD")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-semibold cursor-pointer ${
-                        paymentMethod === "CARD"
-                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10"
-                          : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
-                      }`}
-                    >
-                      <CreditCard className={`w-5 h-5 ${paymentMethod === "CARD" ? "text-indigo-400" : "text-slate-400"}`} />
-                      <span>Debit/Credit</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod("NETBANKING")}
-                      className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-semibold cursor-pointer ${
-                        paymentMethod === "NETBANKING"
-                          ? "bg-indigo-600/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10"
-                          : "bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
-                      }`}
-                    >
-                      <Building2 className={`w-5 h-5 ${paymentMethod === "NETBANKING" ? "text-indigo-400" : "text-slate-400"}`} />
-                      <span>Net Banking</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Payment Method Specific Inputs */}
-                <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800 space-y-3 text-xs">
-                  {paymentMethod === "UPI" && (
-                    <div className="space-y-2">
-                      <label className="block text-slate-300 font-medium">Virtual Payment Address (VPA / UPI ID):</label>
-                      <input
-                        type="text"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                        placeholder="student@upi"
-                        className="app-input text-xs font-mono"
-                      />
-                      <div className="flex gap-2 pt-1">
-                        <span className="badge-tag">Google Pay</span>
-                        <span className="badge-tag">PhonePe</span>
-                        <span className="badge-tag">Paytm</span>
-                        <span className="badge-tag">BHIM UPI</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === "CARD" && (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-slate-300 font-medium mb-1">Card Number:</label>
-                        <input
-                          type="text"
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          placeholder="4532 8920 1142 8821"
-                          className="app-input text-xs font-mono"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-slate-300 font-medium mb-1">Expiry (MM/YY):</label>
-                          <input
-                            type="text"
-                            value={cardExpiry}
-                            onChange={(e) => setCardExpiry(e.target.value)}
-                            placeholder="12/28"
-                            className="app-input text-xs font-mono"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-slate-300 font-medium mb-1">CVV:</label>
-                          <input
-                            type="password"
-                            value={cardCvv}
-                            onChange={(e) => setCardCvv(e.target.value)}
-                            placeholder="842"
-                            maxLength={4}
-                            className="app-input text-xs font-mono"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-slate-300 font-medium mb-1">Cardholder Name:</label>
-                        <input
-                          type="text"
-                          value={cardHolder}
-                          onChange={(e) => setCardHolder(e.target.value)}
-                          placeholder="Student Name"
-                          className="app-input text-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {paymentMethod === "NETBANKING" && (
-                    <div className="space-y-2">
-                      <label className="block text-slate-300 font-medium">Select Bank:</label>
-                      <select
-                        value={selectedBank}
-                        onChange={(e) => setSelectedBank(e.target.value)}
-                        className="app-select w-full text-xs"
-                      >
-                        <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
-                        <option value="HDFC Bank">HDFC Bank</option>
-                        <option value="ICICI Bank">ICICI Bank</option>
-                        <option value="Axis Bank">Axis Bank</option>
-                        <option value="Punjab National Bank (PNB)">Punjab National Bank (PNB)</option>
-                        <option value="Canara Bank">Canara Bank</option>
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Demo Notice */}
-                  <div className="flex items-center gap-2 text-[11px] text-amber-300/90 pt-1">
-                    <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>Demo Payment &bull; No real money will be charged</span>
-                  </div>
-                </div>
-
-                {/* Modal Action Buttons */}
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleClosePaymentModal}
-                    className="btn-secondary w-1/3 py-2.5 text-xs cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleProcessPayment}
-                    className="btn-success w-2/3 py-2.5 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20"
-                  >
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>Pay ₹{profile.totalDue}</span>
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* Step 2: Processing State */}
-            {paymentStep === "PROCESSING" && (
-              <div className="py-12 px-4 text-center space-y-5 animate-fadeIn">
-                <div className="relative mx-auto w-16 h-16 flex items-center justify-center">
-                  <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-                  <Lock className="w-6 h-6 text-indigo-400 absolute" />
-                </div>
-                <div className="space-y-1.5">
-                  <h3 className="font-extrabold text-white text-lg">Processing Payment...</h3>
-                  <p className="text-xs text-slate-400">Communicating with Demo Payment Gateway</p>
-                  <p className="text-sm font-mono text-emerald-400 font-bold pt-2">₹{profile.totalDue}</p>
-                </div>
-                <div className="inline-flex items-center gap-2 text-[11px] text-slate-500 bg-slate-900 px-3 py-1.5 rounded-full">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                  <span>256-Bit Simulated SSL Encryption</span>
+                <h3 className="font-extrabold text-white text-xl">Payment Successful</h3>
+                <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Razorpay Test Mode Verified</span>
                 </div>
               </div>
-            )}
 
-            {/* Step 3: Payment Successful Screen */}
-            {paymentStep === "SUCCESS" && paymentReceipt && (
-              <div className="space-y-5 animate-fadeIn">
-                {/* Success Icon & Header */}
-                <div className="text-center space-y-2 pt-2">
-                  <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 flex items-center justify-center mx-auto text-emerald-400 shadow-xl shadow-emerald-500/20">
-                    <Check className="w-8 h-8 stroke-[3]" />
-                  </div>
-                  <h3 className="font-extrabold text-white text-xl">Payment Successful</h3>
-                  <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs">
-                    <span>Fine Status: Paid</span>
-                  </div>
+              {/* Receipt Details Card */}
+              <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5 text-xs">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-900">
+                  <span className="text-slate-400">Amount Paid:</span>
+                  <span className="text-xl font-extrabold text-emerald-400 font-mono">₹{paymentReceipt.amountPaid}</span>
                 </div>
-
-                {/* Receipt Details Card */}
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2.5 text-xs">
-                  <div className="flex justify-between items-center pb-2 border-b border-slate-900">
-                    <span className="text-slate-400">Amount Paid:</span>
-                    <span className="text-xl font-extrabold text-emerald-400 font-mono">₹{paymentReceipt.amountPaid}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Student Name:</span>
-                    <span className="font-semibold text-white">{paymentReceipt.studentName}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Register Number:</span>
-                    <span className="font-mono text-slate-200">{paymentReceipt.regNo}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Transaction ID:</span>
-                    <span className="font-mono text-indigo-400 font-semibold">{paymentReceipt.transactionId}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Payment Method:</span>
-                    <span className="text-slate-200 font-medium">{paymentReceipt.paymentMethod}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400">Date &amp; Time:</span>
-                    <span className="text-slate-300 font-mono text-[11px]">{paymentReceipt.timestamp}</span>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Student Name:</span>
+                  <span className="font-semibold text-white">{paymentReceipt.studentName}</span>
                 </div>
-
-                {/* Done Button */}
-                <button
-                  type="button"
-                  onClick={handleClosePaymentModal}
-                  className="btn-primary w-full py-3 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/20"
-                >
-                  <span>Done</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Register Number:</span>
+                  <span className="font-mono text-slate-200">{paymentReceipt.regNo}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Razorpay Payment ID:</span>
+                  <span className="font-mono text-indigo-400 font-semibold">{paymentReceipt.transactionId}</span>
+                </div>
+                {paymentReceipt.orderId && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Razorpay Order ID:</span>
+                    <span className="font-mono text-slate-300 font-semibold">{paymentReceipt.orderId}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Payment Method:</span>
+                  <span className="text-slate-200 font-medium capitalize">{paymentReceipt.paymentMethod}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400">Date &amp; Time:</span>
+                  <span className="text-slate-300 font-mono text-[11px]">{paymentReceipt.timestamp}</span>
+                </div>
               </div>
-            )}
 
+              {/* Done Button */}
+              <button
+                type="button"
+                onClick={handleCloseReceiptModal}
+                className="btn-primary w-full py-3 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-500/20"
+              >
+                <span>Done</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}

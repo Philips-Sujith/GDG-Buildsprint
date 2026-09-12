@@ -8,6 +8,7 @@ const borrowSchema = new mongoose.Schema({
   fineAmount: { type: Number, default: 0 },
   isPaid: { type: Boolean, default: false },
   returnedDate: { type: Date, default: null },
+  paidDate: { type: Date, default: null },
 });
 
 module.exports = mongoose.model("Borrow", borrowSchema);
