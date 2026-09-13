@@ -21,10 +21,15 @@ if (!MONGO_URI) {
  * - Restores Borrow.fineAmount, isPaid: false, paidDate: null to baseline seed data
  * - Never modifies real students or admin accounts
  */
-async function resetMockPayments() {
+async function resetMockPayments(isStandalone = false) {
   try {
-    await mongoose.connect(MONGO_URI);
-    console.log("Connected to MongoDB for mock payment reset...\n");
+    if (mongoose.connection.readyState !== 1) {
+      if (!MONGO_URI) {
+        throw new Error("MONGO_URI is missing in environment.");
+      }
+      await mongoose.connect(MONGO_URI);
+      console.log("Connected to MongoDB for mock payment reset...\n");
+    }
 
     const DAY_MS = 24 * 60 * 60 * 1000;
     const now = Date.now();
@@ -123,12 +128,32 @@ async function resetMockPayments() {
     console.log("\nMock payment state successfully reset.");
     console.log("========================================\n");
 
-    await mongoose.disconnect();
-    process.exit(0);
+    if (isStandalone) {
+      await mongoose.disconnect();
+      process.exit(0);
+    }
+
+    return {
+      success: true,
+      message: `Mock payment state successfully reset for ${profilesProcessed} demo profiles (${profilesWithFines} with restored fines).`,
+      profilesProcessed,
+      profilesWithFines,
+      totalFineRestored: totalFineAmount,
+      summary: summaryLines,
+    };
   } catch (error) {
     console.error("❌ Error resetting mock payments:", error);
-    process.exit(1);
+    if (isStandalone) {
+      process.exit(1);
+    }
+    throw error;
   }
 }
 
-resetMockPayments();
+if (require.main === module) {
+  resetMockPayments(true);
+}
+
+module.exports = {
+  resetMockPayments,
+};

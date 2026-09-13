@@ -391,6 +391,24 @@ export const updateAdminGrievanceStatus = async (id, status) => {
 };
 
 /**
+ * Clear all student grievances from MongoDB (Admin only)
+ * DELETE /api/admin/grievances/clear-all
+ */
+export const clearAdminGrievances = async () => {
+  const response = await api.delete('/admin/grievances/clear-all');
+  return response.data;
+};
+
+/**
+ * Reset demo student payment profiles to initial seeded fine states
+ * POST /api/payment/reset-demo
+ */
+export const resetDemoPayments = async () => {
+  const response = await api.post('/payment/reset-demo');
+  return response.data;
+};
+
+/**
  * Fetch Razorpay payment transactions with filter
  */
 export const getAdminPayments = async (params = {}) => {

@@ -12,8 +12,10 @@ import {
   Check,
   GraduationCap,
   ShieldCheck,
+  RotateCcw,
+  ExternalLink,
 } from 'lucide-react';
-import { loginUser, getMockProfiles } from '../api/api';
+import { loginUser, getMockProfiles, resetDemoPayments } from '../api/api';
 
 const ADMIN_DEMO = {
   name: 'Arun Karthick',
@@ -52,6 +54,49 @@ export default function Login() {
   const [mockProfiles, setMockProfiles] = useState(FALLBACK_MOCK_PROFILES);
   const [mockSearchQuery, setMockSearchQuery] = useState('');
   const [selectedRegNo, setSelectedRegNo] = useState(null);
+
+  // Reset Payment State
+  const [showResetPaymentModal, setShowResetPaymentModal] = useState(false);
+  const [resettingPayment, setResettingPayment] = useState(false);
+  const [resetPaymentSuccess, setResetPaymentSuccess] = useState('');
+  const [resetPaymentError, setResetPaymentError] = useState('');
+
+  // Handle Demo Payment Reset
+  const handleConfirmResetPayments = async () => {
+    setResettingPayment(true);
+    setResetPaymentSuccess('');
+    setResetPaymentError('');
+    try {
+      const res = await resetDemoPayments();
+      if (res.success) {
+        setShowResetPaymentModal(false);
+        setResetPaymentSuccess(
+          res.message || 'Demo payment profiles restored with seeded outstanding fines.'
+        );
+        // Refresh live mock profiles list so modal updates fine badges
+        getMockProfiles()
+          .then((r) => {
+            if (r.data?.profiles?.length > 0) {
+              setMockProfiles(r.data.profiles);
+            }
+          })
+          .catch(() => {});
+        setTimeout(() => setResetPaymentSuccess(''), 6000);
+      } else {
+        setResetPaymentError(res.message || 'Failed to reset demo payment profiles.');
+      }
+    } catch (err) {
+      console.error('Reset payment error:', err);
+      setResetPaymentError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to reset demo payment profiles.'
+      );
+    } finally {
+      setResettingPayment(false);
+    }
+  };
 
   // Load live profiles from backend if available
   useEffect(() => {
@@ -178,6 +223,20 @@ export default function Login() {
             </div>
           )}
 
+          {resetPaymentSuccess && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-800/60 text-emerald-200 text-xs flex items-center gap-2.5 animate-fadeIn">
+              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>{resetPaymentSuccess}</span>
+            </div>
+          )}
+
+          {resetPaymentError && (
+            <div className="p-3.5 rounded-xl bg-red-950/60 border border-red-800/60 text-red-200 text-xs flex items-center gap-2.5 animate-fadeIn">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+              <span>{resetPaymentError}</span>
+            </div>
+          )}
+
           {/* Registration Number */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
@@ -219,11 +278,11 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Submit Button */}
-          <div className="pt-2">
+          {/* Submit & Secondary Action Buttons */}
+          <div className="pt-2 space-y-2.5">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || resettingPayment}
               className="btn-primary w-full py-3"
             >
               {loading ? (
@@ -238,6 +297,22 @@ export default function Login() {
                 </>
               )}
             </button>
+
+            {/* Feature 2: RESET PAYMENT Secondary Button */}
+            <button
+              type="button"
+              disabled={loading || resettingPayment}
+              onClick={() => {
+                setResetPaymentSuccess('');
+                setResetPaymentError('');
+                setShowResetPaymentModal(true);
+              }}
+              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-900/90 hover:bg-slate-900 text-indigo-300 hover:text-indigo-200 border border-slate-800 hover:border-indigo-500/40 transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
+              title="Reset seeded demo students' fines to test payment flow"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 text-indigo-400 ${resettingPayment ? 'animate-spin' : ''}`} />
+              <span>{resettingPayment ? 'RESETTING...' : 'RESET PAYMENT'}</span>
+            </button>
           </div>
 
           {/* Switch to Register */}
@@ -248,6 +323,62 @@ export default function Login() {
             </Link>
           </p>
         </form>
+
+        {/* =========================================================================
+            FEATURE 3: DEVELOPED BY TEAM FOOTER
+            ========================================================================= */}
+        <div className="pt-2 text-center space-y-2.5 border-t border-slate-800/80">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+            Developed By
+          </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+            <a
+              href="https://github.com/gokulwm"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
+            >
+              <span className="font-semibold text-slate-200 group-hover:text-white transition">
+                Gokul M
+              </span>
+              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
+                <span>github.com/gokulwm</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+              </span>
+            </a>
+
+            <a
+              href="https://github.com/sbkumar-27"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
+            >
+              <span className="font-semibold text-slate-200 group-hover:text-white transition">
+                Bagavath Kumar S
+              </span>
+              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
+                <span>github.com/sbkumar-27</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+              </span>
+            </a>
+
+            <a
+              href="https://github.com/Philips-Sujith"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
+            >
+              <span className="font-semibold text-slate-200 group-hover:text-white transition">
+                Sujith B
+              </span>
+              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
+                <span>github.com/Philips-Sujith</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
+              </span>
+            </a>
+          </div>
+        </div>
       </div>
 
       {/* =========================================================================
@@ -437,6 +568,70 @@ export default function Login() {
               <span className="text-slate-500">
                 15 accounts across 6 departments with ₹0–₹300 fines
               </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+         FEATURE 2: RESET DEMO PAYMENT PROFILES CONFIRMATION MODAL
+         ========================================================================= */}
+      {showResetPaymentModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="app-card-container w-full max-w-md p-6 space-y-4 shadow-2xl border border-indigo-500/40">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-indigo-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">
+                  Reset demo payment profiles?
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  This restores the seeded demo students&apos; outstanding fines so the payment flow can be demonstrated again.
+                </p>
+                <p className="text-xs text-slate-300">
+                  No real payments will be refunded or modified.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+              <p className="font-semibold text-slate-200">Safety &amp; Audit Guarantee:</p>
+              <p className="text-slate-400 leading-relaxed">
+                • Affects only the 15 designated demo student profiles.<br />
+                • Preserves Razorpay audit records and MongoDB transaction history.<br />
+                • Does not reset admin, real students, or unrelated accounts.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={resettingPayment}
+                onClick={() => setShowResetPaymentModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={resettingPayment}
+                onClick={handleConfirmResetPayments}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {resettingPayment ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Restoring Fines...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Confirm Reset</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

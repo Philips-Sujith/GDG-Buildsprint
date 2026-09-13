@@ -432,6 +432,35 @@ router.put('/grievances/:id/status', async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/grievances/clear-all
+ * Admin-protected: Permanently remove all grievance reports from MongoDB.
+ * - Enforces requireAdmin middleware
+ * - Affects ONLY Grievance collection
+ * - Never modifies Users, Books, Borrow, Payments, Presence, etc.
+ */
+const clearAllGrievancesHandler = async (req, res) => {
+  try {
+    const result = await Grievance.deleteMany({});
+    console.log(`[Admin] Cleared all grievances: ${result.deletedCount} records deleted.`);
+    return res.json({
+      success: true,
+      message: `Successfully cleared all grievance reports (${result.deletedCount} removed).`,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error('Admin clear all grievances error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to clear grievances',
+      message: 'Failed to clear grievances',
+    });
+  }
+};
+
+router.delete('/grievances/clear-all', clearAllGrievancesHandler);
+router.delete('/grievances', clearAllGrievancesHandler);
+
+/**
  * GET /api/admin/payments
  * Read-only monitoring of Razorpay payment transactions
  */

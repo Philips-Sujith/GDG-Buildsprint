@@ -343,4 +343,31 @@ router.get("/verify/:orderId", async (req, res) => {
   }
 });
 
+const { resetMockPayments } = require("../resetMockPayments");
+
+/**
+ * POST /api/payment/reset-demo
+ * Safely restores seeded demo student fines and borrow states for the 15 designated mock students.
+ * - Publicly accessible from login screen for demo reset
+ * - Idempotent
+ * - Affects ONLY designated MOCK_STUDENTS
+ * - Preserves Payment audit collection records
+ * - Never modifies admin or real students
+ */
+const resetDemoHandler = async (req, res) => {
+  try {
+    const result = await resetMockPayments(false);
+    return res.json(result);
+  } catch (error) {
+    console.error("[Payment] Error resetting demo payments:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to reset demo payment profiles.",
+    });
+  }
+};
+
+router.post("/reset-demo", resetDemoHandler);
+router.post("/reset-mock", resetDemoHandler);
+
 module.exports = router;

@@ -28,6 +28,7 @@ import {
   ImageOff,
   Maximize2,
   FileText,
+  Trash2,
 } from 'lucide-react';
 import {
   getAdminOverview,
@@ -36,6 +37,7 @@ import {
   updateAdminBook,
   getAdminGrievances,
   updateAdminGrievanceStatus,
+  clearAdminGrievances,
   getAdminPayments,
   resetLibraryOccupancy,
 } from '../api/api';
@@ -193,6 +195,8 @@ export default function Admin() {
   const [updatingGrievanceId, setUpdatingGrievanceId] = useState(null);
   const [expandedGrievanceId, setExpandedGrievanceId] = useState(null);
   const [grievanceToast, setGrievanceToast] = useState('');
+  const [showClearGrievancesModal, setShowClearGrievancesModal] = useState(false);
+  const [clearingGrievances, setClearingGrievances] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState(null); // { url, title }
 
   // Payment Monitoring State
@@ -326,6 +330,33 @@ export default function Admin() {
       alert('Failed to reset library occupancy. Check server logs.');
     } finally {
       setResettingOccupancy(false);
+    }
+  };
+
+  // Clear All Grievances Handler
+  const handleConfirmClearGrievances = async () => {
+    setClearingGrievances(true);
+    try {
+      const res = await clearAdminGrievances();
+      if (res.success) {
+        setGrievances([]);
+        setShowClearGrievancesModal(false);
+        setGrievanceToast(res.message || 'All grievance reports have been cleared successfully.');
+        fetchOverview();
+        setTimeout(() => setGrievanceToast(''), 4000);
+      } else {
+        alert(res.message || 'Failed to clear grievances.');
+      }
+    } catch (err) {
+      console.error('Clear grievances error:', err);
+      alert(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          'Failed to clear grievances.'
+      );
+    } finally {
+      setClearingGrievances(false);
     }
   };
 
@@ -1019,21 +1050,35 @@ export default function Admin() {
                 </p>
               </div>
 
-              {/* Status Filter Pills */}
-              <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
-                {['All', 'Submitted', 'Under Review', 'Resolved', 'Rejected'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setGrievanceFilter(status)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer whitespace-nowrap ${
-                      grievanceFilter === status
-                        ? 'bg-purple-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
+              {/* Action Controls & Status Filter Pills */}
+              <div className="flex items-center gap-2.5 flex-wrap justify-end">
+                {/* Clear All Grievances Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowClearGrievancesModal(true)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+                  title="Clear all grievance reports from database"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Clear All Grievances</span>
+                </button>
+
+                {/* Status Filter Pills */}
+                <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+                  {['All', 'Submitted', 'Under Review', 'Resolved', 'Rejected'].map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setGrievanceFilter(status)}
+                      className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer whitespace-nowrap ${
+                        grievanceFilter === status
+                          ? 'bg-purple-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1910,6 +1955,63 @@ export default function Admin() {
                   The original image file could not be retrieved.
                 </span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Clear All Grievances Confirmation Modal */}
+      {showClearGrievancesModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+          <div className="app-card-container w-full max-w-md p-6 space-y-4 shadow-2xl border border-rose-500/40">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-400" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">
+                  Clear all grievance reports?
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  This will permanently remove every grievance submission from the database.
+                </p>
+                <p className="text-xs font-semibold text-rose-400">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-[11px] text-rose-200 leading-relaxed">
+              ⚠️ <strong>Warning:</strong> All student book damage submissions, photo references, and grievance records will be permanently deleted from MongoDB.
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                disabled={clearingGrievances}
+                onClick={() => setShowClearGrievancesModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={clearingGrievances}
+                onClick={handleConfirmClearGrievances}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {clearingGrievances ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                    <span>Clearing Reports...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Clear All</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
