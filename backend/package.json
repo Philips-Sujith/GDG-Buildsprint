@@ -8,6 +8,8 @@
     "seed": "node seed/books.js",
     "seed:materials": "node seed/materials.js",
     "seed:demo": "node seedDemoData.js",
+    "seed:mock": "node seedMockProfiles.js",
+    "reset:mock-payments": "node resetMockPayments.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

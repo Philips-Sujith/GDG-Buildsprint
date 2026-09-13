@@ -54,8 +54,12 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
-    // Sign JWT with regNo in payload
-    const token = jwt.sign({ regNo: user.regNo, id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    // Sign JWT with regNo and role in payload
+    const token = jwt.sign(
+      { regNo: user.regNo, id: user._id, role: user.role || 'student' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     return res.status(201).json({
       success: true,
@@ -67,6 +71,7 @@ router.post('/register', async (req, res) => {
         year: user.year,
         department: user.department,
         email: user.email,
+        role: user.role || 'student',
       },
     });
   } catch (error) {
@@ -108,8 +113,12 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Sign JWT with regNo in payload
-    const token = jwt.sign({ regNo: user.regNo, id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+    // Sign JWT with regNo and role in payload
+    const token = jwt.sign(
+      { regNo: user.regNo, id: user._id, role: user.role || 'student' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     return res.json({
       success: true,
@@ -121,6 +130,7 @@ router.post('/login', async (req, res) => {
         year: user.year,
         department: user.department,
         email: user.email,
+        role: user.role || 'student',
       },
     });
   } catch (error) {
@@ -129,6 +139,63 @@ router.post('/login', async (req, res) => {
       error: error.message || 'Login failed',
       message: error.message || 'Login failed',
     });
+  }
+});
+
+/**
+ * GET /api/auth/mock-profiles
+ * Returns the 15 mock student profiles for hackathon presentation / demo modal
+ * plus admin demo account details
+ */
+router.get('/mock-profiles', async (req, res) => {
+  try {
+    const Borrow = require('../models/Borrow');
+    const mockRegNos = Array.from({ length: 15 }, (_, i) => String(2025503570 + i));
+
+    const users = await User.find({ regNo: { $in: mockRegNos } }).sort({ regNo: 1 }).lean();
+
+    // Fetch borrows to calculate live unpaid fines
+    const borrows = await Borrow.find({
+      regNo: { $in: mockRegNos },
+      returnedDate: null,
+    }).lean();
+
+    const borrowSummary = {};
+    borrows.forEach((b) => {
+      if (!borrowSummary[b.regNo]) {
+        borrowSummary[b.regNo] = { count: 0, totalFine: 0 };
+      }
+      borrowSummary[b.regNo].count += 1;
+      if (!b.isPaid) {
+        borrowSummary[b.regNo].totalFine += Number(b.fineAmount) || 0;
+      }
+    });
+
+    const profiles = users.map((u) => ({
+      regNo: u.regNo,
+      name: u.name,
+      department: u.department,
+      year: u.year,
+      password: 'Demo@123',
+      fineAmount: borrowSummary[u.regNo]?.totalFine || 0,
+      booksCount: borrowSummary[u.regNo]?.count || 0,
+    }));
+
+    return res.json({
+      success: true,
+      count: profiles.length,
+      profiles,
+      adminDemo: {
+        name: 'Arun Karthick',
+        role: 'admin',
+        regNo: 'ADMIN202501',
+        password: 'Admin@123',
+        department: 'Library Administration',
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching mock profiles:', error);
+    return res.status(500).json({ success: false, message: 'Failed to fetch mock profiles' });
   }
 });
 

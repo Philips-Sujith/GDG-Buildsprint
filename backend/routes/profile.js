@@ -48,11 +48,16 @@ router.get("/:regNo", async (req, res) => {
     try {
       if (mongoose.connection.collections["books"]) {
         const bookIds = borrows.map((b) => b.bookId);
+        const validObjectIds = bookIds
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id));
+        const orConditions = [{ bookId: { $in: bookIds } }];
+        if (validObjectIds.length > 0) {
+          orConditions.push({ _id: { $in: validObjectIds } });
+        }
         const bookDocs = await mongoose.connection
           .collection("books")
-          .find({
-            $or: [{ bookId: { $in: bookIds } }, { _id: { $in: bookIds } }],
-          })
+          .find({ $or: orConditions })
           .toArray();
 
         bookDocs.forEach((bk) => {

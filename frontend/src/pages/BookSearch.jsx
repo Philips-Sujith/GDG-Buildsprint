@@ -102,8 +102,8 @@ export default function BookSearch() {
 
           {/* Header Section */}
           <div className="text-center pt-2 pb-1">
-            <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
-              Find Any Engineering Book <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">Instantly</span>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.65rem] xl:text-5xl font-extrabold tracking-tight leading-tight max-w-full break-words">
+              <span className="heading-gradient pr-1">Find Any Engineering Book Instantly</span>
             </h1>
           </div>
 

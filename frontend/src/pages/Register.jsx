@@ -55,8 +55,8 @@ export default function Register() {
               <Library className="w-7 h-7 text-indigo-400" />
             </div>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">
-            Create Student <span className="heading-gradient">Account</span>
+          <h1 className="text-3xl font-extrabold tracking-tight">
+            <span className="heading-gradient">Create Student Account</span>
           </h1>
           <p className="text-sm text-slate-400">Join the Smart Library platform today</p>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   getProfile,
   createPaymentOrder,
@@ -7,6 +8,7 @@ import {
   getGroups,
   shareToGroup,
   checkIn,
+  checkOut,
   respondToPing,
   getPresence,
   getNotifications,
@@ -34,8 +36,68 @@ import {
   Receipt,
   ArrowRight,
   Lock,
+  LogOut,
 } from "lucide-react";
 import Navbar from "../components/Navbar";
+
+/**
+ * Safely parse a date input (string, Date, or number) into a Date object.
+ * Avoids timezone-related off-by-one errors when date-only strings (e.g. "2026-08-01")
+ * or midnight UTC strings ("2026-08-01T00:00:00.000Z") are converted into local time.
+ */
+const parseDateSafely = (dateInput) => {
+  if (!dateInput) return null;
+  if (dateInput instanceof Date) {
+    return isNaN(dateInput.getTime()) ? null : dateInput;
+  }
+  if (typeof dateInput === "number") {
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  if (typeof dateInput === "string") {
+    // If format is YYYY-MM-DD or YYYY-MM-DDT00:00:00... treat as calendar date in local timezone
+    const dateOnlyMatch = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z?)?$/);
+    if (dateOnlyMatch) {
+      const year = parseInt(dateOnlyMatch[1], 10);
+      const month = parseInt(dateOnlyMatch[2], 10) - 1;
+      const day = parseInt(dateOnlyMatch[3], 10);
+      return new Date(year, month, day);
+    }
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  return null;
+};
+
+/**
+ * Checks dynamically whether a book's dueDate has passed against the current date/time.
+ * Returns false if the book was already returned.
+ */
+const isBookOverdue = (dueDateInput, returnedDateInput) => {
+  if (returnedDateInput) return false;
+  const dueDate = parseDateSafely(dueDateInput);
+  if (!dueDate) return false;
+
+  const now = new Date();
+
+  // If due date has hours, minutes, seconds all 0 (date-only or midnight),
+  // the borrower has until the end of that local calendar day (23:59:59.999).
+  if (dueDate.getHours() === 0 && dueDate.getMinutes() === 0 && dueDate.getSeconds() === 0) {
+    const endOfDay = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate(), 23, 59, 59, 999);
+    return now.getTime() > endOfDay.getTime();
+  }
+
+  return now.getTime() > dueDate.getTime();
+};
+
+/**
+ * Formats due date cleanly avoiding timezone off-by-one errors.
+ */
+const formatDueDate = (dateInput) => {
+  const d = parseDateSafely(dateInput);
+  if (!d) return "N/A";
+  return d.toLocaleDateString();
+};
 
 export default function Profile() {
   const authUser = JSON.parse(localStorage.getItem("user") || "{}");
@@ -90,6 +152,9 @@ export default function Profile() {
 
       if (presenceData.status === "fulfilled" && presenceData.value.presence) {
         setPresence(presenceData.value.presence);
+        if (presenceData.value.presence.floor) {
+          setFloor(presenceData.value.presence.floor);
+        }
       }
 
       if (notifsData.status === "fulfilled" && Array.isArray(notifsData.value)) {
@@ -305,6 +370,24 @@ export default function Profile() {
     }
   };
 
+  // Presence Check-Out Handler
+  const handleCheckOut = async () => {
+    setCheckingIn(true);
+    try {
+      const res = await checkOut(regNo);
+      if (res.success) {
+        setPresence(res.presence || { regNo, isActive: false, pendingPing: false });
+        setNotifications((prev) =>
+          prev.filter((n) => n.type !== "presence-ping" && !n.message?.toLowerCase().includes("still in"))
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
   // Presence Ping Response Handler
   const handlePingResponse = async (stillHere, notifId = null) => {
     setPresence((prev) =>
@@ -351,29 +434,21 @@ export default function Profile() {
       <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto space-y-6">
 
-          {/* Top Header & Student RegNo Switcher */}
-          <div className="app-card-container p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
+          {/* Top Header */}
+          <div className="relative flex items-center justify-center py-3 sm:py-4">
+            {/* Centered Heading Block */}
+            <div className="text-center px-12 sm:px-16">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold mb-1">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>Student Hub &amp; Services</span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Student <span className="heading-gradient">Profile</span>
+              <h1 className="text-[2.25rem] sm:text-[2.85rem] font-extrabold tracking-tight leading-tight">
+                <span className="heading-gradient">Student Profile</span>
               </h1>
             </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Viewing Reg No:</span>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={regNo}
-                  onChange={(e) => setRegNo(e.target.value)}
-                  className="app-input font-mono text-xs sm:text-sm uppercase w-36 sm:w-44 py-2"
-                  placeholder="2025503560"
-                />
-              </div>
+            {/* Refresh Button on Far Right */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2">
               <button
                 type="button"
                 onClick={() => loadData(regNo)}
@@ -481,293 +556,283 @@ export default function Profile() {
               {error || "Profile not found."}
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="space-y-6">
               
-              {/* Left Column: Personal Info & Library Presence */}
-              <div className="space-y-6">
+              {/* Primary Profile & Borrow/Presence Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* Personal Details Card */}
-                <div className="app-card-container p-6 space-y-4">
-                  <div className="flex items-center gap-3.5 pb-4 border-b border-slate-800">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/20">
-                      <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-extrabold text-lg text-white">
-                        {profile.name ? profile.name.charAt(0).toUpperCase() : "S"}
+                {/* Left Column: Personal Info & Library Presence */}
+                <div className="space-y-6">
+                  
+                  {/* Personal Details Card */}
+                  <div className="app-card-container p-6 space-y-4">
+                    <div className="flex items-center gap-3.5 pb-4 border-b border-slate-800">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 p-0.5 shadow-lg shadow-indigo-500/20">
+                        <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-extrabold text-lg text-white">
+                          {profile.name ? profile.name.charAt(0).toUpperCase() : "S"}
+                        </div>
+                      </div>
+                      <div>
+                        <h2 className="font-bold text-lg text-white leading-tight">{profile.name}</h2>
+                        <span className="badge-code mt-1 inline-block">
+                          {profile.regNo}
+                        </span>
                       </div>
                     </div>
-                    <div>
-                      <h2 className="font-bold text-lg text-white leading-tight">{profile.name}</h2>
-                      <span className="badge-code mt-1 inline-block">
-                        {profile.regNo}
-                      </span>
+
+                    <div className="space-y-2.5 text-xs sm:text-sm">
+                      <div className="flex justify-between py-1.5 border-b border-slate-800/80">
+                        <span className="text-slate-400">Department</span>
+                        <span className="text-slate-200 font-semibold">{profile.department}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5 border-b border-slate-800/80">
+                        <span className="text-slate-400">Academic Year</span>
+                        <span className="text-slate-200 font-semibold">{profile.year}</span>
+                      </div>
+                      <div className="flex justify-between py-1.5">
+                        <span className="text-slate-400">Student Email</span>
+                        <span className="text-slate-200 font-medium truncate max-w-[180px]">{profile.email}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="space-y-2.5 text-xs sm:text-sm">
-                    <div className="flex justify-between py-1.5 border-b border-slate-800/80">
-                      <span className="text-slate-400">Department</span>
-                      <span className="text-slate-200 font-semibold">{profile.department}</span>
+                  {/* Presence Feature Card */}
+                  <div className="app-card-container p-6 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
+                        <MapPin className="w-4 h-4" />
+                        <span>Library Presence</span>
+                      </div>
+                      {presence && presence.isActive ? (
+                        <span className="badge-success flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Active
+                        </span>
+                      ) : (
+                        <span className="badge-tag">
+                          Not Checked-In
+                        </span>
+                      )}
                     </div>
-                    <div className="flex justify-between py-1.5 border-b border-slate-800/80">
-                      <span className="text-slate-400">Academic Year</span>
-                      <span className="text-slate-200 font-semibold">{profile.year}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5">
-                      <span className="text-slate-400">Student Email</span>
-                      <span className="text-slate-200 font-medium truncate max-w-[180px]">{profile.email}</span>
+
+                    {presence && presence.isActive && (
+                      <div className="bg-slate-950/70 p-3.5 rounded-xl text-xs space-y-1 border border-slate-800">
+                        <p className="text-slate-300">
+                          <span className="text-slate-500">Location:</span> <strong className="text-white">{presence.floor}</strong>
+                        </p>
+                        <p className="text-slate-500">
+                          Checked in: {new Date(presence.checkinTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="space-y-3 pt-1">
+                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                        Select Library Floor / Zone:
+                      </label>
+                      <select
+                        value={floor}
+                        onChange={(e) => setFloor(e.target.value)}
+                        className="app-select w-full"
+                      >
+                        <option value="First Floor">First Floor</option>
+                        <option value="Second Floor">Second Floor</option>
+                        <option value="Reading Room">Reading Room</option>
+                        <option value="Discussion Room">Discussion Room</option>
+                        <option value="Study Room">Study Room</option>
+                        <option value="Reference Room">Reference Room</option>
+                      </select>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCheckIn}
+                          disabled={checkingIn}
+                          className="btn-primary flex-1 py-2.5 text-xs cursor-pointer"
+                        >
+                          <UserCheck className="w-4 h-4" />
+                          <span>{checkingIn ? "Updating..." : (presence && presence.isActive ? "Change Zone" : "I'm in the Library (Check-In)")}</span>
+                        </button>
+
+                        {presence && presence.isActive && (
+                          <button
+                            type="button"
+                            onClick={handleCheckOut}
+                            disabled={checkingIn}
+                            className="btn-secondary py-2.5 px-3 text-xs cursor-pointer text-rose-400 hover:text-rose-300 hover:border-rose-500/40 flex items-center gap-1.5"
+                            title="Check out and leave library"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Leave</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
+
                 </div>
 
-                {/* Presence Feature Card */}
-                <div className="app-card-container p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-indigo-400 font-bold text-sm">
-                      <MapPin className="w-4 h-4" />
-                      <span>Library Presence</span>
+                {/* Right Column: Borrowed Books & Fine Payment */}
+                <div className="lg:col-span-2 space-y-6">
+                  
+                  {/* Borrowed Books & Fine Payment Card */}
+                  <div className="app-card-container p-6 space-y-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+                      <div className="flex items-center gap-2 text-indigo-400 font-bold">
+                        <BookOpen className="w-5 h-5" />
+                        <span>Currently Borrowed Books ({profile.borrowedBooks ? profile.borrowedBooks.length : 0})</span>
+                      </div>
+
+                      {/* Total Fine & Pay Fine Button */}
+                      <div className="flex items-center gap-4 bg-slate-950/80 px-4 py-2.5 rounded-xl border border-slate-800">
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-medium">Total Fine Due</span>
+                          <span className="text-lg font-extrabold text-emerald-400 font-mono">₹{profile.totalDue || 0}</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handlePayFine}
+                          disabled={!profile.totalDue || profile.totalDue <= 0 || paymentLoading}
+                          className={`text-xs py-2 px-4 font-semibold transition flex items-center gap-2 ${
+                            profile.totalDue > 0
+                              ? "btn-success cursor-pointer shadow-lg shadow-emerald-500/20"
+                              : "bg-slate-800 text-slate-500 border border-slate-700/60 rounded-xl cursor-not-allowed opacity-60"
+                          }`}
+                        >
+                          {paymentLoading ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Processing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4" />
+                              <span>{profile.totalDue > 0 ? "Pay Fine" : "Paid"}</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    {presence && presence.isActive ? (
-                      <span className="badge-success flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Active
-                      </span>
+
+                    {/* Payment Feedback Banner */}
+                    {paymentMsg && (
+                      <div
+                        className={`text-xs p-3.5 rounded-xl border font-medium flex items-center gap-2 ${
+                          paymentStatusType === "success"
+                            ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
+                            : paymentStatusType === "error"
+                            ? "bg-red-950/60 border-red-500/40 text-red-300"
+                            : "bg-slate-900 border-slate-700 text-slate-300"
+                        }`}
+                      >
+                        {paymentStatusType === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                        {paymentStatusType === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
+                        <span>{paymentMsg}</span>
+                      </div>
+                    )}
+
+                    {/* Books List */}
+                    {!profile.borrowedBooks || profile.borrowedBooks.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 text-sm">
+                        No active borrowed books on record.
+                      </div>
                     ) : (
-                      <span className="badge-tag">
-                        Not Checked-In
-                      </span>
+                      <div className="divide-y divide-slate-800">
+                        {profile.borrowedBooks.map((book) => {
+                          const isOverdue = isBookOverdue(book.dueDate, book.returnedDate);
+                          const isReturned = Boolean(book.returnedDate);
+                          const isPaid = Boolean(book.isPaid || book.finePaid || book.paidDate);
+                          const fineAmount = Number(book.fineAmount) || 0;
+
+                          return (
+                            <div key={book._id || book.bookId} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <h4 className="font-bold text-white text-sm sm:text-base">{book.title}</h4>
+                              </div>
+
+                              <div className="flex items-center gap-2 sm:gap-3 text-xs flex-wrap">
+                                <div className="flex items-center gap-1.5 text-slate-400">
+                                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                                  <span>Due: <strong className="text-slate-200">{formatDueDate(book.dueDate)}</strong></span>
+                                </div>
+
+                                {isReturned ? (
+                                  <>
+                                    <span className="badge-tag">Returned</span>
+                                    {isPaid && <span className="badge-success font-mono">Fine Paid</span>}
+                                    {!isPaid && fineAmount > 0 && (
+                                      <span className="badge-warning font-mono">Fine: ₹{fineAmount}</span>
+                                    )}
+                                  </>
+                                ) : isOverdue ? (
+                                  <>
+                                    <span className="badge-danger">Overdue</span>
+                                    {isPaid ? (
+                                      <span className="badge-success font-mono">Fine Paid</span>
+                                    ) : fineAmount > 0 ? (
+                                      <span className="badge-warning font-mono">Fine: ₹{fineAmount}</span>
+                                    ) : null}
+                                  </>
+                                ) : (
+                                  <span className="badge-success">On Schedule</span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
 
-                  {presence && presence.isActive && (
-                    <div className="bg-slate-950/70 p-3.5 rounded-xl text-xs space-y-1 border border-slate-800">
-                      <p className="text-slate-300">
-                        <span className="text-slate-500">Location:</span> <strong className="text-white">{presence.floor}</strong>
-                      </p>
-                      <p className="text-slate-500">
-                        Checked in: {new Date(presence.checkinTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-3 pt-1">
-                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                      Select Library Floor / Zone:
-                    </label>
-                    <select
-                      value={floor}
-                      onChange={(e) => setFloor(e.target.value)}
-                      className="app-select w-full"
-                    >
-                      <option value="First Floor">First Floor</option>
-                      <option value="Second Floor">Second Floor</option>
-                      <option value="Reading Room">Reading Room</option>
-                      <option value="Discussion Room">Discussion Room</option>
-                      <option value="Study Room">Study Room</option>
-                      <option value="Reference Room">Reference Room</option>
-                    </select>
-
-                    <button
-                      type="button"
-                      onClick={handleCheckIn}
-                      disabled={checkingIn}
-                      className="btn-primary w-full py-2.5 text-xs cursor-pointer"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      <span>{checkingIn ? "Checking in..." : "I'm in the Library (Check-In)"}</span>
-                    </button>
-                  </div>
                 </div>
 
               </div>
 
-              {/* Right Column: Borrowed Books, Fine Payment & Groups */}
-              <div className="lg:col-span-2 space-y-6">
-                
-                {/* Borrowed Books & Fine Payment Card */}
-                <div className="app-card-container p-6 space-y-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
-                    <div className="flex items-center gap-2 text-indigo-400 font-bold">
-                      <BookOpen className="w-5 h-5" />
-                      <span>Currently Borrowed Books ({profile.borrowedBooks ? profile.borrowedBooks.length : 0})</span>
+              {/* Compact Entry Card: Private Study & Material Sharing */}
+              <div className="app-card-container p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-5 border border-slate-800 hover:border-purple-500/30 transition shadow-lg shadow-black/20">
+                <div className="flex items-start sm:items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-500/20 via-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400 shadow-md shadow-purple-500/10">
+                    <Users className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-white text-base sm:text-lg">Private Study &amp; Material Sharing</h3>
+                      <span className="badge-tag text-[10px] font-mono text-purple-300 border-purple-500/30 bg-purple-500/10">
+                        Private Space
+                      </span>
                     </div>
+                    <p className="text-xs sm:text-sm text-slate-400 max-w-xl">
+                      Collaborate privately with study groups, manage peer members, and share course study materials securely.
+                    </p>
 
-                    {/* Total Fine & Pay Fine Button */}
-                    <div className="flex items-center gap-4 bg-slate-950/80 px-4 py-2.5 rounded-xl border border-slate-800">
-                      <div>
-                        <span className="text-[11px] text-slate-400 block font-medium">Total Fine Due</span>
-                        <span className="text-lg font-extrabold text-emerald-400 font-mono">₹{profile.totalDue || 0}</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handlePayFine}
-                        disabled={!profile.totalDue || profile.totalDue <= 0 || paymentLoading}
-                        className={`text-xs py-2 px-4 font-semibold transition flex items-center gap-2 ${
-                          profile.totalDue > 0
-                            ? "btn-success cursor-pointer shadow-lg shadow-emerald-500/20"
-                            : "bg-slate-800 text-slate-500 border border-slate-700/60 rounded-xl cursor-not-allowed opacity-60"
-                        }`}
-                      >
-                        {paymentLoading ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <span>Processing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CreditCard className="w-4 h-4" />
-                            <span>{profile.totalDue > 0 ? "Pay Fine" : "Paid"}</span>
-                          </>
+                    {/* Active Group Names */}
+                    {groups.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap pt-1">
+                        <span className="text-xs text-slate-400 font-medium">Your Groups:</span>
+                        {groups.slice(0, 3).map((g) => (
+                          <span
+                            key={g._id}
+                            className="badge-tag text-xs font-semibold text-purple-300 border-purple-500/30 bg-purple-950/40"
+                          >
+                            {g.name || "Study Group"}
+                          </span>
+                        ))}
+                        {groups.length > 3 && (
+                          <span className="text-[11px] text-slate-400 font-mono">+{groups.length - 3} more</span>
                         )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Payment Feedback Banner */}
-                  {paymentMsg && (
-                    <div
-                      className={`text-xs p-3.5 rounded-xl border font-medium flex items-center gap-2 ${
-                        paymentStatusType === "success"
-                          ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-300"
-                          : paymentStatusType === "error"
-                          ? "bg-red-950/60 border-red-500/40 text-red-300"
-                          : "bg-slate-900 border-slate-700 text-slate-300"
-                      }`}
-                    >
-                      {paymentStatusType === "success" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-                      {paymentStatusType === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
-                      <span>{paymentMsg}</span>
-                    </div>
-                  )}
-
-                  {/* Books List */}
-                  {!profile.borrowedBooks || profile.borrowedBooks.length === 0 ? (
-                    <div className="text-center py-8 text-slate-500 text-sm">
-                      No active borrowed books on record.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-slate-800">
-                      {profile.borrowedBooks.map((book) => (
-                        <div key={book._id || book.bookId} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                          <div>
-                            <h4 className="font-bold text-white text-sm sm:text-base">{book.title}</h4>
-                            <span className="badge-code text-[11px] mt-1 inline-block">ID: {book.bookId}</span>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-xs">
-                            <div className="flex items-center gap-1.5 text-slate-400">
-                              <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                              <span>Due: <strong className="text-slate-200">{new Date(book.dueDate).toLocaleDateString()}</strong></span>
-                            </div>
-                            {book.fineAmount > 0 ? (
-                              <span className="badge-warning font-mono">Fine: ₹{book.fineAmount}</span>
-                            ) : (
-                              <span className="badge-success">On Schedule</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Private / Study Groups Card */}
-                <div className="app-card-container p-6 space-y-5">
-                  <div className="flex items-center gap-2 text-purple-400 font-bold pb-4 border-b border-slate-800">
-                    <Users className="w-5 h-5" />
-                    <span>Private Study &amp; Material Sharing Groups</span>
-                  </div>
-
-                  {/* Create Group Form */}
-                  <form onSubmit={handleCreateGroup} className="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-                    <h4 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Create New Study Group</h4>
-                    <div className="flex flex-col sm:flex-row gap-2.5">
-                      <input
-                        type="text"
-                        value={newMemberRegNos}
-                        onChange={(e) => setNewMemberRegNos(e.target.value)}
-                        placeholder="Enter peer reg numbers (e.g. 2025503561, 2025503562)"
-                        className="app-input text-xs"
-                      />
-                      <button
-                        type="submit"
-                        className="btn-primary text-xs shrink-0 py-2 cursor-pointer"
-                      >
-                        <PlusCircle className="w-4 h-4" />
-                        <span>Create Group</span>
-                      </button>
-                    </div>
-                    {groupMsg && <p className="text-xs text-emerald-400 font-medium">{groupMsg}</p>}
-                  </form>
-
-                  {/* List of Groups */}
-                  <div className="space-y-4">
-                    {groups.length === 0 ? (
-                      <p className="text-xs text-slate-500 text-center py-4">No active study groups. Create one above to share resources privately.</p>
-                    ) : (
-                      groups.map((group) => (
-                        <div key={group._id} className="app-card space-y-3">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="badge-code">
-                                Owner: {group.ownerRegNo}
-                              </span>
-                              <div className="mt-2 flex flex-wrap gap-1.5 items-center">
-                                <span className="text-xs text-slate-400">Members:</span>
-                                {group.memberRegNos.map((m) => (
-                                  <span key={m} className="badge-tag font-mono">
-                                    {m}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Shared Materials */}
-                          <div className="space-y-1.5 pt-1">
-                            <span className="text-xs font-medium text-slate-400 block">Shared Study Resources:</span>
-                            {group.sharedMaterialIds.length === 0 ? (
-                              <p className="text-xs text-slate-600 italic">No resources shared yet.</p>
-                            ) : (
-                              <div className="flex flex-wrap gap-2">
-                                {group.sharedMaterialIds.map((matId, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="badge-tag flex items-center gap-1.5 font-mono text-indigo-300"
-                                  >
-                                    <BookOpen className="w-3 h-3 text-indigo-400" />
-                                    {matId}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Share Material Input */}
-                          <div className="flex gap-2 pt-2 border-t border-slate-800">
-                            <input
-                              type="text"
-                              placeholder="Enter Material ID / Document Code to share"
-                              value={shareMaterialIds[group._id] || ""}
-                              onChange={(e) =>
-                                setShareMaterialIds({ ...shareMaterialIds, [group._id]: e.target.value })
-                              }
-                              className="app-input text-xs py-1.5"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleShareMaterial(group._id)}
-                              className="btn-secondary text-xs py-1.5 px-3 cursor-pointer"
-                            >
-                              <Share2 className="w-3.5 h-3.5" />
-                              <span>Share</span>
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                      </div>
                     )}
                   </div>
                 </div>
 
+                <Link
+                  to="/private-space"
+                  className="btn-primary text-xs sm:text-sm py-2.5 px-5 font-semibold shrink-0 flex items-center justify-center gap-2 group cursor-pointer shadow-lg shadow-indigo-500/20"
+                >
+                  <span>Open Private Space</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </Link>
               </div>
 
             </div>

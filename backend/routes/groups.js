@@ -5,7 +5,7 @@ const Group = require("../models/Group");
 // POST /api/groups - Create a group
 router.post("/", async (req, res) => {
   try {
-    const { ownerRegNo, memberRegNos } = req.body;
+    const { name, ownerRegNo, memberRegNos } = req.body;
 
     if (!ownerRegNo) {
       return res.status(400).json({ success: false, message: "ownerRegNo is required" });
@@ -16,7 +16,10 @@ router.post("/", async (req, res) => {
       members.push(ownerRegNo);
     }
 
+    const groupName = name && typeof name === "string" && name.trim() ? name.trim() : "Study Group";
+
     const newGroup = await Group.create({
+      name: groupName,
       ownerRegNo,
       memberRegNos: members,
       sharedMaterialIds: [],

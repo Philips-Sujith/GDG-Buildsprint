@@ -15,7 +15,13 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Only attach Authorization header to local API requests, never to third-party endpoints (e.g. Cloudinary)
+      const url = config.url || '';
+      const isExternal = (url.startsWith('http://') || url.startsWith('https://')) &&
+                         !url.includes(window.location.host);
+      if (!isExternal) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
     return config;
   },
@@ -27,12 +33,23 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Don't auto-redirect on public search pages
-      const path = window.location.pathname;
-      if (path !== '/login' && path !== '/register' && path !== '/books' && path !== '/contributions') {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
+      const url = error.config?.url || '';
+      // CRITICAL: File upload requests (Cloudinary or backend /upload) must NEVER clear user auth
+      const isUploadRequest = url.includes('/upload') || url.includes('cloudinary');
+      
+      if (!isUploadRequest) {
+        const path = window.location.pathname;
+        const isPublicPage = path === '/login' || path === '/register' || path === '/books' || path === '/contributions';
+
+        // Only log out if it's a verified JWT session expiration on an authenticated API
+        const errorMsg = String(error.response.data?.error || error.response.data?.message || '').toLowerCase();
+        const isTokenExpired = errorMsg.includes('token') || errorMsg.includes('unauthorized');
+
+        if (!isPublicPage && isTokenExpired) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
@@ -54,6 +71,11 @@ export const registerUser = (userData) => api.post('/auth/register', userData);
  * @param {Object} credentials - { regNo, password }
  */
 export const loginUser = (credentials) => api.post('/auth/login', credentials);
+
+/**
+ * Fetch demo mock profiles for presentation
+ */
+export const getMockProfiles = () => api.get('/auth/mock-profiles');
 
 /**
  * Fetch live library crowd count
@@ -146,6 +168,16 @@ export const searchMaterials = async (params = {}) => {
   return response.data;
 };
 
+/**
+ * Fetch all study materials
+ * GET /api/materials
+ * @param {Object} params - { year, subjectCode }
+ */
+export const getMaterials = async (params = {}) => {
+  const response = await api.get('/materials', { params });
+  return response.data;
+};
+
 /* =========================================================================
    =================== PERSON 3: PROFILE, PAYMENTS, GROUPS & PRESENCE ======
    ========================================================================= */
@@ -192,9 +224,12 @@ export const verifyPayment = async ({
 /**
  * Create a new Study/Material Sharing Group
  * POST /api/groups
+ * @param {string} ownerRegNo
+ * @param {string[]} memberRegNos
+ * @param {string} [name]
  */
-export const createGroup = async (ownerRegNo, memberRegNos) => {
-  const response = await api.post('/groups', { ownerRegNo, memberRegNos });
+export const createGroup = async (ownerRegNo, memberRegNos, name) => {
+  const response = await api.post('/groups', { ownerRegNo, memberRegNos, name });
   return response.data;
 };
 
@@ -222,6 +257,15 @@ export const shareToGroup = async (groupId, materialId, regNo) => {
  */
 export const checkIn = async (regNo, floor) => {
   const response = await api.post('/presence/checkin', { regNo, floor });
+  return response.data;
+};
+
+/**
+ * Check-out / Leave Library Presence
+ * POST /api/presence/checkout
+ */
+export const checkOut = async (regNo) => {
+  const response = await api.post('/presence/checkout', { regNo });
   return response.data;
 };
 
@@ -270,4 +314,73 @@ export const dismissNotificationsByPattern = async (regNo, message) => {
   return response.data;
 };
 
+/* =========================================================================
+   =================== ADMIN DASHBOARD APIs ===============================
+   ========================================================================= */
+
+/**
+ * Fetch overview stats and live occupancy breakdown
+ */
+export const getAdminOverview = async () => {
+  const response = await api.get('/admin/overview');
+  return response.data;
+};
+
+/**
+ * Fetch books with pagination & search
+ */
+export const getAdminBooks = async (params = {}) => {
+  const response = await api.get('/admin/books', { params });
+  return response.data;
+};
+
+/**
+ * Add a new catalog book
+ */
+export const addAdminBook = async (bookData) => {
+  const response = await api.post('/admin/books', bookData);
+  return response.data;
+};
+
+/**
+ * Update an existing catalog book
+ */
+export const updateAdminBook = async (id, bookData) => {
+  const response = await api.put(`/admin/books/${id}`, bookData);
+  return response.data;
+};
+
+/**
+ * Fetch all student grievances
+ */
+export const getAdminGrievances = async () => {
+  const response = await api.get('/admin/grievances');
+  return response.data;
+};
+
+/**
+ * Update grievance status
+ */
+export const updateAdminGrievanceStatus = async (id, status) => {
+  const response = await api.put(`/admin/grievances/${id}/status`, { status });
+  return response.data;
+};
+
+/**
+ * Fetch Razorpay payment transactions with filter
+ */
+export const getAdminPayments = async (params = {}) => {
+  const response = await api.get('/admin/payments', { params });
+  return response.data;
+};
+
+/**
+ * Reset active library occupancy to zero
+ */
+export const resetLibraryOccupancy = async () => {
+  const response = await api.post('/admin/library/reset');
+  return response.data;
+};
+
 export default api;
+

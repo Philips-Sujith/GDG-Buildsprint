@@ -14,17 +14,14 @@ import {
 import { getLibraryCount, getNotifications, respondToPing, dismissNotification } from '../api/api';
 import Navbar from '../components/Navbar';
 
-// Exactly 6 standardized library areas with realistic occupancy counts
-const DEMO_PRESENCE = {
-  total: 82,
-  byFloor: {
-    'First Floor': 23,
-    'Second Floor': 14,
-    'Reading Room': 18,
-    'Discussion Room': 4,
-    'Study Room': 12,
-    'Reference Room': 11,
-  },
+// Exactly 6 standardized library areas with persistent baseline distribution (sum = 38)
+const DEFAULT_FLOORS = {
+  'First Floor': 8,
+  'Second Floor': 7,
+  'Reading Room': 9,
+  'Discussion Room': 4,
+  'Study Room': 6,
+  'Reference Room': 4,
 };
 
 const FLOOR_ICONS = {
@@ -34,19 +31,6 @@ const FLOOR_ICONS = {
   'Discussion Room': '👥',
   'Study Room': '🤫',
   'Reference Room': '📑',
-};
-
-// Map legacy or varied backend names cleanly to the 6 standard room names
-const normalizeFloorName = (rawName) => {
-  if (!rawName) return 'First Floor';
-  const lower = rawName.toLowerCase();
-  if (lower.includes('first') || lower.includes('1st') || lower.includes('floor 1')) return 'First Floor';
-  if (lower.includes('second') || lower.includes('2nd') || lower.includes('floor 2')) return 'Second Floor';
-  if (lower.includes('reading')) return 'Reading Room';
-  if (lower.includes('discussion')) return 'Discussion Room';
-  if (lower.includes('study')) return 'Study Room';
-  if (lower.includes('reference')) return 'Reference Room';
-  return rawName;
 };
 
 export default function Home() {
@@ -79,37 +63,28 @@ export default function Home() {
     const fetchCount = async () => {
       try {
         const { data } = await getLibraryCount();
-        const hasRealFloors = data?.byFloor && Object.keys(data.byFloor).length > 0;
-        
-        if (data && data.total && data.total >= 5 && hasRealFloors) {
-          // Normalize floor names to our 6 standard rooms
-          const normalizedFloors = { ...DEMO_PRESENCE.byFloor };
-          Object.entries(data.byFloor).forEach(([fl, cnt]) => {
-            const standardName = normalizeFloorName(fl);
-            normalizedFloors[standardName] = cnt;
-          });
+        if (data) {
+          const roomSource = data.rooms || data.byFloor || {};
+          const standardFloors = {
+            'First Floor': Number(roomSource['First Floor']) || 0,
+            'Second Floor': Number(roomSource['Second Floor']) || 0,
+            'Reading Room': Number(roomSource['Reading Room']) || 0,
+            'Discussion Room': Number(roomSource['Discussion Room']) || 0,
+            'Study Room': Number(roomSource['Study Room']) || 0,
+            'Reference Room': Number(roomSource['Reference Room']) || 0,
+          };
+          const authoritativeTotal =
+            typeof data.total === 'number' ? data.total : Number(data.baseCount) || 38;
+
           setCountData({
-            total: Object.values(normalizedFloors).reduce((a, b) => a + b, 0),
-            byFloor: normalizedFloors,
-          });
-        } else {
-          // Use the 6 standard room names with realistic mock values
-          const mergedFloors = { ...DEMO_PRESENCE.byFloor };
-          if (data?.byFloor) {
-            Object.entries(data.byFloor).forEach(([fl, cnt]) => {
-              const standardName = normalizeFloorName(fl);
-              mergedFloors[standardName] = (mergedFloors[standardName] || 0) + cnt;
-            });
-          }
-          const mergedTotal = Object.values(mergedFloors).reduce((a, b) => a + b, 0);
-          setCountData({
-            total: mergedTotal,
-            byFloor: mergedFloors,
+            total: authoritativeTotal,
+            baseCount: data.baseCount || 38,
+            activeCheckIns: data.activeCheckIns || 0,
+            byFloor: standardFloors,
           });
         }
       } catch (err) {
-        console.error('Failed to fetch library count, using demo presence:', err);
-        setCountData(DEMO_PRESENCE);
+        console.error('Failed to fetch library count:', err);
       } finally {
         setLoading(false);
       }
@@ -120,8 +95,8 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  const totalOccupancy = countData?.total || DEMO_PRESENCE.total;
-  const floors = countData?.byFloor || DEMO_PRESENCE.byFloor;
+  const totalOccupancy = countData !== null && countData.total !== undefined ? countData.total : 38;
+  const floors = countData?.byFloor || DEFAULT_FLOORS;
 
   // Handle Presence Ping Response from Notification Banner
   const handlePing = async (stillHere, notifId) => {

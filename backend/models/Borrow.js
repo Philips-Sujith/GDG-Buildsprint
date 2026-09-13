@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const borrowSchema = new mongoose.Schema({
   regNo: { type: String, required: true },
   bookId: { type: String, required: true },
+  title: { type: String, default: "" },
   borrowDate: { type: Date, default: Date.now },
   dueDate: { type: Date, required: true },
   fineAmount: { type: Number, default: 0 },

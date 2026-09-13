@@ -204,8 +204,8 @@ export default function Contribution() {
 
           {/* Page Title */}
           <div className="text-center pt-2 pb-1">
-            <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white">
-              Search <span className="heading-gradient">Study Materials</span>
+            <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight">
+              <span className="heading-gradient">Search Study Materials</span>
             </h1>
           </div>
 

@@ -31,57 +31,128 @@ export default function Grievance() {
     shelfCode: '',
   });
 
-  const [coverPhoto, setCoverPhoto] = useState({ url: '', uploading: false, preview: '' });
-  const [reasonPhoto, setReasonPhoto] = useState({ url: '', uploading: false, preview: '' });
+  // Dedicated, consistent File and preview states
+  const [coverFile, setCoverFile] = useState(null);
+  const [coverPreview, setCoverPreview] = useState('');
+  const [damageFile, setDamageFile] = useState(null);
+  const [damagePreview, setDamagePreview] = useState('');
+
   const [submitting, setSubmitting] = useState(false);
+  const [submittingStep, setSubmittingStep] = useState('');
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState('');
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-  const handlePhotoUpload = async (file, setter) => {
+  const handleCoverSelect = (e) => {
+    const file = e.target.files?.[0];
     if (!file) return;
-    setter((prev) => ({ ...prev, uploading: true, preview: URL.createObjectURL(file) }));
-    try {
-      const res = await uploadFile(file);
-      const fileUrl = res.url || res.fileUrl || res.data?.url;
-      setter((prev) => ({ ...prev, url: fileUrl, uploading: false }));
-    } catch (err) {
-      setter((prev) => ({ ...prev, uploading: false }));
-      setError('Photo upload failed. Please try again.');
-    }
+    setError('');
+    setCoverFile(file);
+    setCoverPreview(URL.createObjectURL(file));
+  };
+
+  const handleDamageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    setDamageFile(file);
+    setDamagePreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!coverPhoto.url || !reasonPhoto.url) {
+    // Validate required text fields
+    if (!form.bookName.trim()) {
+      setError('Please enter the Book Title / Subject Code.');
+      return;
+    }
+    if (!form.shelfCode.trim()) {
+      setError('Please enter the Shelf Code / Rack.');
+      return;
+    }
+
+    // Validate that BOTH file objects exist in state
+    if (!coverFile || !damageFile) {
       setError('Please upload both the Book Cover and Damage Evidence photos.');
       return;
     }
 
+    // Prevent duplicate submissions
+    if (submitting) return;
     setSubmitting(true);
+
     try {
+      // 1. Upload Book Cover
+      setSubmittingStep('Uploading book cover photo...');
+      let coverPhotoUrl = '';
+      try {
+        const coverRes = await uploadFile(coverFile);
+        coverPhotoUrl = coverRes.url || coverRes.fileUrl || coverRes.data?.url;
+        if (!coverPhotoUrl) {
+          throw new Error('No URL returned for book cover');
+        }
+      } catch (coverErr) {
+        console.error('Book cover upload failed:', coverErr);
+        setError('Book cover upload failed. Please try again.');
+        setSubmitting(false);
+        setSubmittingStep('');
+        return;
+      }
+
+      // 2. Upload Damage Evidence
+      setSubmittingStep('Uploading damage evidence photo...');
+      let reasonPhotoUrl = '';
+      try {
+        const damageRes = await uploadFile(damageFile);
+        reasonPhotoUrl = damageRes.url || damageRes.fileUrl || damageRes.data?.url;
+        if (!reasonPhotoUrl) {
+          throw new Error('No URL returned for damage evidence');
+        }
+      } catch (damageErr) {
+        console.error('Damage evidence upload failed:', damageErr);
+        setError('Damage evidence upload failed. Please try again.');
+        setSubmitting(false);
+        setSubmittingStep('');
+        return;
+      }
+
+      // 3. Submit Grievance with both URLs
+      setSubmittingStep('Submitting grievance report...');
       const reasonText =
         form.reasonDropdown === 'Other'
           ? form.reasonText
           : `${form.reasonDropdown}${form.reasonText ? ' - ' + form.reasonText : ''}`;
 
       const res = await submitGrievance({
-        bookName: form.bookName,
-        coverPhotoUrl: coverPhoto.url,
-        reasonPhotoUrl: reasonPhoto.url,
+        bookName: form.bookName.trim(),
+        coverPhotoUrl,
+        reasonPhotoUrl,
         reasonText,
-        shelfCode: form.shelfCode,
+        shelfCode: form.shelfCode.trim(),
       });
 
       const grievanceId = res.data?.grievanceId || res.grievanceId || 'GRV-' + Date.now();
       setSuccess(grievanceId);
+
+      // Clear form and file states ONLY after successful submission
+      setForm({ bookName: '', reasonDropdown: 'Page Missing', reasonText: '', shelfCode: '' });
+      setCoverFile(null);
+      setCoverPreview('');
+      setDamageFile(null);
+      setDamagePreview('');
     } catch (err) {
-      setError(err.response?.data?.error || err.response?.data?.message || 'Submission failed. Please check connection.');
+      console.error('Grievance submission error:', err);
+      setError(
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        'Submission failed. Please check connection.'
+      );
     } finally {
       setSubmitting(false);
+      setSubmittingStep('');
     }
   };
 
@@ -94,8 +165,8 @@ export default function Grievance() {
 
           {/* Header */}
           <div className="text-center space-y-2 pt-2 pb-2">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              Report Book <span className="heading-gradient">Grievance</span>
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
+              <span className="heading-gradient">Report Book Grievance</span>
             </h1>
             <p className="text-sm text-slate-400 max-w-xl mx-auto">
               Found missing pages, physical wear, or incorrect shelf placement? Submit a report for our library maintenance staff.
@@ -124,8 +195,11 @@ export default function Grievance() {
                   onClick={() => {
                     setSuccess(null);
                     setForm({ bookName: '', reasonDropdown: 'Page Missing', reasonText: '', shelfCode: '' });
-                    setCoverPhoto({ url: '', uploading: false, preview: '' });
-                    setReasonPhoto({ url: '', uploading: false, preview: '' });
+                    setCoverFile(null);
+                    setCoverPreview('');
+                    setDamageFile(null);
+                    setDamagePreview('');
+                    setError('');
                   }}
                   className="btn-secondary"
                 >
@@ -233,9 +307,9 @@ export default function Grievance() {
                     1. Book Cover Photo <span className="text-indigo-400">*</span>
                   </label>
                   <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-950/60 hover:bg-slate-950 transition cursor-pointer group min-h-[120px]">
-                    {coverPhoto.preview ? (
+                    {coverPreview && coverFile ? (
                       <div className="relative w-full flex items-center justify-between">
-                        <img src={coverPhoto.preview} alt="Cover" className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
+                        <img src={coverPreview} alt="Cover" className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
                         <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4" /> Ready
                         </span>
@@ -244,7 +318,7 @@ export default function Grievance() {
                       <div className="text-center space-y-1">
                         <ImageIcon className="w-6 h-6 text-slate-500 group-hover:text-indigo-400 mx-auto transition" />
                         <span className="text-xs text-slate-300 font-medium block">
-                          {coverPhoto.uploading ? 'Uploading...' : 'Upload Cover Photo'}
+                          Upload Cover Photo
                         </span>
                         <span className="text-[10px] text-slate-500">PNG, JPG up to 10MB</span>
                       </div>
@@ -253,7 +327,7 @@ export default function Grievance() {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handlePhotoUpload(e.target.files[0], setCoverPhoto)}
+                      onChange={handleCoverSelect}
                     />
                   </label>
                 </div>
@@ -264,9 +338,9 @@ export default function Grievance() {
                     2. Damage Evidence Photo <span className="text-indigo-400">*</span>
                   </label>
                   <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl bg-slate-950/60 hover:bg-slate-950 transition cursor-pointer group min-h-[120px]">
-                    {reasonPhoto.preview ? (
+                    {damagePreview && damageFile ? (
                       <div className="relative w-full flex items-center justify-between">
-                        <img src={reasonPhoto.preview} alt="Evidence" className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
+                        <img src={damagePreview} alt="Evidence" className="h-16 w-16 object-cover rounded-lg border border-slate-700" />
                         <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4" /> Ready
                         </span>
@@ -275,7 +349,7 @@ export default function Grievance() {
                       <div className="text-center space-y-1">
                         <ImageIcon className="w-6 h-6 text-slate-500 group-hover:text-indigo-400 mx-auto transition" />
                         <span className="text-xs text-slate-300 font-medium block">
-                          {reasonPhoto.uploading ? 'Uploading...' : 'Upload Damage Photo'}
+                          Upload Damage Photo
                         </span>
                         <span className="text-[10px] text-slate-500">PNG, JPG up to 10MB</span>
                       </div>
@@ -284,7 +358,7 @@ export default function Grievance() {
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => handlePhotoUpload(e.target.files[0], setReasonPhoto)}
+                      onChange={handleDamageSelect}
                     />
                   </label>
                 </div>
@@ -295,13 +369,13 @@ export default function Grievance() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={submitting || coverPhoto.uploading || reasonPhoto.uploading}
+                  disabled={submitting}
                   className="btn-primary w-full py-3.5"
                 >
                   {submitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                      <span>Submitting Grievance Report...</span>
+                      <span>{submittingStep || 'Submitting Grievance Report...'}</span>
                     </>
                   ) : (
                     <>

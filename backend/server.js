@@ -34,9 +34,11 @@ const paymentRoutes = require("./routes/payment");
 const presenceRoutes = require("./routes/presence");
 const groupsRoutes = require("./routes/groups");
 const notificationsRoutes = require("./routes/notifications");
+const adminRoutes = require("./routes/admin");
 
 // API Route Registrations
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/library", libraryRoutes);
 app.use("/api/grievance", grievanceRoutes);
 app.use("/api/upload", uploadRoutes);
