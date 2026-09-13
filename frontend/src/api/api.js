@@ -1,10 +1,32 @@
 import axios from 'axios';
 
 /**
+ * Resolves the authoritative backend API base URL:
+ * 1. Reads VITE_API_BASE_URL or VITE_API_URL if configured.
+ * 2. Normalizes trailing slashes and ensures /api path exists without double slashes.
+ * 3. In production mode, defaults to 'https://gdg-buildsprint.onrender.com/api'.
+ * 4. In development mode, defaults to '/api' (proxied by Vite to local backend http://localhost:5000).
+ */
+const getBaseURL = () => {
+  const envUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL;
+  if (envUrl && typeof envUrl === 'string' && envUrl.trim()) {
+    let cleanUrl = envUrl.trim().replace(/\/+$/, '');
+    if (!cleanUrl.endsWith('/api')) {
+      cleanUrl = `${cleanUrl}/api`;
+    }
+    return cleanUrl;
+  }
+  if (import.meta.env.PROD) {
+    return 'https://gdg-buildsprint.onrender.com/api';
+  }
+  return '/api';
+};
+
+/**
  * Single shared Axios instance for all teammates (Person 1, Person 2, Person 3)
  */
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -15,10 +37,12 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
-      // Only attach Authorization header to local API requests, never to third-party endpoints (e.g. Cloudinary)
+      // Only attach Authorization header to our library backend API requests, never to third-party endpoints (e.g. Cloudinary)
       const url = config.url || '';
-      const isExternal = (url.startsWith('http://') || url.startsWith('https://')) &&
-                         !url.includes(window.location.host);
+      const isExternal =
+        (url.startsWith('http://') || url.startsWith('https://')) &&
+        !url.includes(window.location.host) &&
+        !url.includes('gdg-buildsprint.onrender.com');
       if (!isExternal) {
         config.headers.Authorization = `Bearer ${token}`;
       }
