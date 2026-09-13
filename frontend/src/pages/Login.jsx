@@ -327,54 +327,65 @@ export default function Login() {
         </form>
 
         {/* =========================================================================
-            FEATURE 3: DEVELOPED BY FOOTER (Horizontal / No Boxes)
+            FEATURE 3: DEVELOPED BY FOOTER (Polished & Seamless)
             ========================================================================= */}
-        <footer className="pt-3 pb-1 text-center space-y-2 border-t border-slate-900">
+        <footer className="pt-4 pb-1 text-center space-y-2.5 border-t border-slate-800/60">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
             DEVELOPED BY
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-2 px-2 text-xs">
-            <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
-              <span className="font-medium text-slate-300">Gokul M</span>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0 px-1">
+            {/* Developer 1: Gokul M */}
+            <div className="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left">
+              <span className="text-[13px] sm:text-sm font-semibold text-slate-200 tracking-tight">
+                Gokul M
+              </span>
               <a
                 href="https://github.com/gokulwm"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+                className="text-xs font-medium text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 transition duration-150 mt-0.5 group"
               >
-                <span>GitHub</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                <span className="group-hover:underline underline-offset-2">GitHub</span>
+                <ExternalLink className="w-3 h-3 opacity-70 group-hover:opacity-100 transition-opacity" />
               </a>
             </div>
 
-            <div className="hidden sm:block w-px h-6 bg-slate-800/80"></div>
+            {/* Subtle Divider 1 */}
+            <div className="hidden sm:block w-px h-8 bg-slate-800/80 mx-2"></div>
 
-            <div className="flex flex-col items-center text-center">
-              <span className="font-medium text-slate-300">Bagavath Kumar S</span>
+            {/* Developer 2: Bagavath Kumar S */}
+            <div className="flex-1 flex flex-col items-center text-center px-1">
+              <span className="text-[13px] sm:text-sm font-semibold text-slate-200 tracking-tight whitespace-nowrap">
+                Bagavath Kumar S
+              </span>
               <a
                 href="https://github.com/sbkumar-27"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+                className="text-xs font-medium text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 transition duration-150 mt-0.5 group"
               >
-                <span>GitHub</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                <span className="group-hover:underline underline-offset-2">GitHub</span>
+                <ExternalLink className="w-3 h-3 opacity-70 group-hover:opacity-100 transition-opacity" />
               </a>
             </div>
 
-            <div className="hidden sm:block w-px h-6 bg-slate-800/80"></div>
+            {/* Subtle Divider 2 */}
+            <div className="hidden sm:block w-px h-8 bg-slate-800/80 mx-2"></div>
 
-            <div className="flex flex-col items-center sm:items-end text-center sm:text-right">
-              <span className="font-medium text-slate-300">Sujith B</span>
+            {/* Developer 3: Sujith B */}
+            <div className="flex-1 flex flex-col items-center sm:items-end text-center sm:text-right">
+              <span className="text-[13px] sm:text-sm font-semibold text-slate-200 tracking-tight">
+                Sujith B
+              </span>
               <a
                 href="https://github.com/Philips-Sujith"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+                className="text-xs font-medium text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1 transition duration-150 mt-0.5 group"
               >
-                <span>GitHub</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                <span className="group-hover:underline underline-offset-2">GitHub</span>
+                <ExternalLink className="w-3 h-3 opacity-70 group-hover:opacity-100 transition-opacity" />
               </a>
             </div>
           </div>
