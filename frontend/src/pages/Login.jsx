@@ -298,21 +298,23 @@ export default function Login() {
               )}
             </button>
 
-            {/* Feature 2: RESET PAYMENT Secondary Button */}
-            <button
-              type="button"
-              disabled={loading || resettingPayment}
-              onClick={() => {
-                setResetPaymentSuccess('');
-                setResetPaymentError('');
-                setShowResetPaymentModal(true);
-              }}
-              className="w-full py-2.5 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-900/90 hover:bg-slate-900 text-indigo-300 hover:text-indigo-200 border border-slate-800 hover:border-indigo-500/40 transition flex items-center justify-center gap-2 cursor-pointer shadow-sm disabled:opacity-50"
-              title="Reset seeded demo students' fines to test payment flow"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 text-indigo-400 ${resettingPayment ? 'animate-spin' : ''}`} />
-              <span>{resettingPayment ? 'RESETTING...' : 'RESET PAYMENT'}</span>
-            </button>
+            {/* Feature 2: RESET PAYMENT Secondary Utility Button (Subtle & Compact) */}
+            <div className="flex justify-center pt-0.5">
+              <button
+                type="button"
+                disabled={loading || resettingPayment}
+                onClick={() => {
+                  setResetPaymentSuccess('');
+                  setResetPaymentError('');
+                  setShowResetPaymentModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 py-1 px-3 rounded-lg text-[11px] font-medium tracking-wide bg-slate-900/40 hover:bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800/80 hover:border-slate-700 transition cursor-pointer shadow-none disabled:opacity-50"
+                title="Reset seeded demo students' fines to test payment flow"
+              >
+                <RotateCcw className={`w-3 h-3 text-slate-500 ${resettingPayment ? 'animate-spin text-indigo-400' : ''}`} />
+                <span>{resettingPayment ? 'RESETTING...' : 'RESET PAYMENT'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Switch to Register */}
@@ -325,60 +327,58 @@ export default function Login() {
         </form>
 
         {/* =========================================================================
-            FEATURE 3: DEVELOPED BY TEAM FOOTER
+            FEATURE 3: DEVELOPED BY FOOTER (Horizontal / No Boxes)
             ========================================================================= */}
-        <div className="pt-2 text-center space-y-2.5 border-t border-slate-800/80">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
-            Developed By
-          </span>
+        <footer className="pt-3 pb-1 text-center space-y-2 border-t border-slate-900">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            DEVELOPED BY
+          </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <a
-              href="https://github.com/gokulwm"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
-            >
-              <span className="font-semibold text-slate-200 group-hover:text-white transition">
-                Gokul M
-              </span>
-              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
-                <span>github.com/gokulwm</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
-              </span>
-            </a>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-2 px-2 text-xs">
+            <div className="flex flex-col items-center sm:items-start text-center sm:text-left">
+              <span className="font-medium text-slate-300">Gokul M</span>
+              <a
+                href="https://github.com/gokulwm"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+            </div>
 
-            <a
-              href="https://github.com/sbkumar-27"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
-            >
-              <span className="font-semibold text-slate-200 group-hover:text-white transition">
-                Bagavath Kumar S
-              </span>
-              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
-                <span>github.com/sbkumar-27</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
-              </span>
-            </a>
+            <div className="hidden sm:block w-px h-6 bg-slate-800/80"></div>
 
-            <a
-              href="https://github.com/Philips-Sujith"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2.5 rounded-xl bg-slate-900/70 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 transition group flex flex-col items-center justify-center text-center shadow-sm"
-            >
-              <span className="font-semibold text-slate-200 group-hover:text-white transition">
-                Sujith B
-              </span>
-              <span className="text-[11px] text-indigo-400 group-hover:text-indigo-300 font-mono mt-0.5 inline-flex items-center gap-1">
-                <span>github.com/Philips-Sujith</span>
-                <ExternalLink className="w-2.5 h-2.5 opacity-60 group-hover:opacity-100" />
-              </span>
-            </a>
+            <div className="flex flex-col items-center text-center">
+              <span className="font-medium text-slate-300">Bagavath Kumar S</span>
+              <a
+                href="https://github.com/sbkumar-27"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+            </div>
+
+            <div className="hidden sm:block w-px h-6 bg-slate-800/80"></div>
+
+            <div className="flex flex-col items-center sm:items-end text-center sm:text-right">
+              <span className="font-medium text-slate-300">Sujith B</span>
+              <a
+                href="https://github.com/Philips-Sujith"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-indigo-400 hover:text-indigo-300 transition inline-flex items-center gap-1 hover:underline mt-0.5"
+              >
+                <span>GitHub</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+              </a>
+            </div>
           </div>
-        </div>
+        </footer>
       </div>
 
       {/* =========================================================================
